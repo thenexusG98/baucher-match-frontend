@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Card from "./ui/Card";
 import CardContent from "./ui/CardContent";
+import { db } from "../services/database";
 
 interface HistoryEntry {
   filename: string;
@@ -150,6 +151,25 @@ export default function UploadStatement({
       };
       const month =
         monthMap[monthName.toUpperCase()] || monthName.substring(0, 3);
+
+      // Extraer el año del nombre del archivo
+      const year = db.extractYearFromFilename(fileName);
+
+      // Guardar en la base de datos
+      try {
+        const savedStatement = await db.addStatement({
+          filename: fileName,
+          month,
+          year,
+          ingreso: ingreso,
+          totalCount: totalCount,
+          processedAt: new Date().toISOString(),
+        });
+
+        console.log('Statement guardado en DB:', savedStatement);
+      } catch (dbError) {
+        console.error('Error al guardar en DB:', dbError);
+      }
 
       // Notificar al componente padre (puedes ajustar el ingreso según tus necesidades)
       if (onFileProcessed) {

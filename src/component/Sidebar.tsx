@@ -6,7 +6,6 @@ import UploadPartialStatement from "./UploadPartialStatement";
 import { GoHome } from "react-icons/go";
 import { FaRegFilePdf } from "react-icons/fa";
 import { LuNotepadText } from "react-icons/lu";
-import { IoMdGitCompare } from "react-icons/io";
 import { GrConfigure } from "react-icons/gr";
 import { IoIosArrowBack } from "react-icons/io";
 import { IoIosArrowForward } from "react-icons/io";
