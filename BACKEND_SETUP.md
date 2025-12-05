@@ -55,14 +55,61 @@ npm run tauri:dev
 
 ## 📦 Compilar para Producción
 
+### Requisitos Previos
+
+El backend usa `pdftotext` que requiere librerías del sistema. Estas se incluirán automáticamente en el instalador final.
+
+**macOS:**
+```bash
+brew install poppler
+```
+
+**Linux:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install libpoppler-cpp-dev
+
+# Fedora/RHEL
+sudo dnf install poppler-cpp-devel
+
+# Arch
+sudo pacman -S poppler
+```
+
+**Windows:**
+Ver instrucciones en `WINDOWS_LIBS_SETUP.md`
+
+### Compilar Todo
+
 ```bash
 npm run build:all
 ```
 
-Esto:
-1. Compila el backend con PyInstaller
-2. Compila el frontend con Vite
-3. Empaqueta todo en un instalador
+Este comando:
+1. **Compila el backend** con PyInstaller → `src-tauri/binaries/backend-api-*`
+2. **Copia las librerías de Poppler** → `src-tauri/libs/*.dylib` (o .so/.dll)
+3. **Compila el frontend** con Vite → `dist/`
+4. **Empaqueta todo** con Tauri → Instalador final
+
+### ¿Qué incluye el instalador final?
+
+El instalador resultante es **completamente autónomo** e incluye:
+
+✅ **Python runtime embebido** (NO requiere Python instalado)
+✅ **Todas las dependencias Python** (FastAPI, uvicorn, PyMuPDF, etc.)
+✅ **Librerías del sistema** (Poppler para pdftotext)
+✅ **Frontend React compilado**
+✅ **Base de datos SQLite**
+
+### El usuario final NO necesita instalar:
+
+❌ Python
+❌ pip
+❌ Node.js
+❌ Poppler
+❌ Ninguna dependencia
+
+**Todo está empaquetado en el instalador.**
 
 Los instaladores estarán en:
 - macOS: `src-tauri/target/release/bundle/dmg/`

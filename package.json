@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:backend": "./build-backend.sh",
-    "build:all": "npm run build:backend && npm run tauri build",
+    "build:libs": "./bundle-libs.sh",
+    "build:all": "npm run build:backend && npm run build:libs && npm run tauri build",
     "dev:backend": ".venv/bin/python -m uvicorn app.app:app --reload --host 127.0.0.1 --port 8000 --app-dir backend",
     "tauri:dev": "npm run tauri dev"
   },

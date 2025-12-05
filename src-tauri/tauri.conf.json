@@ -34,6 +34,8 @@
     "externalBin": [
       "binaries/backend-api"
     ],
-    "resources": []
+    "resources": [
+      "libs/*"
+    ]
   }
 }
