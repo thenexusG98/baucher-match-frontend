@@ -26,7 +26,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -38,7 +37,7 @@ jobs:
           brew install poppler
 
       - name: Install Node dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       - name: Setup Python virtual environment
         run: |
@@ -90,7 +89,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -115,7 +113,7 @@ jobs:
             poppler-utils
 
       - name: Install Node dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       - name: Setup Python virtual environment
         run: |
@@ -174,7 +172,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -182,7 +179,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Node dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       - name: Setup Python virtual environment
         run: |
