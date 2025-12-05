@@ -3,6 +3,7 @@ use rusqlite::{Connection, Result as SqlResult};
 use std::sync::Mutex;
 use tauri::{State, Manager};
 use std::path::PathBuf;
+use std::process::{Command, Child};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProcessedStatement {
@@ -17,6 +18,10 @@ pub struct ProcessedStatement {
 
 pub struct DbState {
     conn: Mutex<Connection>,
+}
+
+pub struct BackendProcess {
+    child: Mutex<Option<Child>>,
 }
 
 fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -237,6 +242,60 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> Result<String, String> {
+    let mut child_lock = state.child.lock().map_err(|e| e.to_string())?;
+    
+    if child_lock.is_some() {
+        return Ok("Backend ya está corriendo".to_string());
+    }
+    
+    // Obtener ruta del sidecar usando el API resolver de Tauri
+    let backend_path = app_handle
+        .path()
+        .resolve("binaries/backend-api", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("No se pudo obtener ruta del backend: {}", e))?;
+    
+    println!("🚀 Iniciando backend desde: {:?}", backend_path);
+    
+    // Verificar que el archivo existe
+    if !backend_path.exists() {
+        return Err(format!(
+            "El ejecutable del backend no existe en: {:?}. Asegúrate de ejecutar ./build-backend.sh primero.",
+            backend_path
+        ));
+    }
+    
+    // Iniciar proceso
+    let child = Command::new(&backend_path)
+        .spawn()
+        .map_err(|e| format!("Error al iniciar backend: {}. Ruta: {:?}", e, backend_path))?;
+    
+    println!("✅ Backend iniciado con PID: {:?}", child.id());
+    
+    *child_lock = Some(child);
+    Ok("Backend iniciado correctamente en http://127.0.0.1:8000".to_string())
+}
+
+#[tauri::command]
+fn stop_backend(state: State<BackendProcess>) -> Result<String, String> {
+    let mut child_lock = state.child.lock().map_err(|e| e.to_string())?;
+    
+    if let Some(mut child) = child_lock.take() {
+        child.kill().map_err(|e| format!("Error al detener backend: {}", e))?;
+        println!("🛑 Backend detenido");
+        Ok("Backend detenido".to_string())
+    } else {
+        Ok("Backend no está corriendo".to_string())
+    }
+}
+
+#[tauri::command]
+fn check_backend_status(state: State<BackendProcess>) -> Result<bool, String> {
+    let child_lock = state.child.lock().map_err(|e| e.to_string())?;
+    Ok(child_lock.is_some())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -255,6 +314,11 @@ pub fn run() {
                 conn: Mutex::new(conn),
             });
             
+            // Inicializar el estado del proceso del backend
+            app.manage(BackendProcess {
+                child: Mutex::new(None),
+            });
+            
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -266,8 +330,20 @@ pub fn run() {
             get_available_years,
             delete_statement,
             clear_all_statements,
-            get_database_path
+            get_database_path,
+            start_backend,
+            stop_backend,
+            check_backend_status
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // Detener backend al cerrar ventana
+                let app = window.app_handle();
+                if let Some(backend_state) = app.try_state::<BackendProcess>() {
+                    let _ = stop_backend(backend_state);
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

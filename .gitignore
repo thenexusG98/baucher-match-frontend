@@ -22,3 +22,30 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/build/
+backend/dist/
+backend/*.egg-info/
+.venv/
+venv/
+ENV/
+
+# PyInstaller
+*.spec
+
+# Backend binaries (opcional: descomenta si no quieres hacer commit de los binarios)
+# src-tauri/binaries/
+
+# Tauri
+src-tauri/target/
+src-tauri/WixTools/
+
+# Temporary files
+temp/
+*.tmp
