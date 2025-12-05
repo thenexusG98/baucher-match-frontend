@@ -43,7 +43,7 @@ jobs:
         run: |
           python3 -m venv .venv
           .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r backend/requeriments.txt
+          .venv/bin/pip install -r backend/requirements.txt
           .venv/bin/pip install pyinstaller
 
       - name: Install Rust
@@ -119,7 +119,7 @@ jobs:
         run: |
           python3 -m venv .venv
           .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r backend/requeriments.txt
+          .venv/bin/pip install -r backend/requirements.txt
           .venv/bin/pip install pyinstaller
 
       - name: Install Rust
@@ -185,7 +185,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv\Scripts\pip install --upgrade pip
-          .venv\Scripts\pip install -r backend\requeriments.txt
+          .venv\Scripts\pip install -r backend\requirements.txt
           .venv\Scripts\pip install pyinstaller
 
       - name: Install Rust
