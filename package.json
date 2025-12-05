@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "build:backend": "./build-backend.sh",
     "build:all": "npm run build:backend && npm run tauri build",
-    "dev:backend": "cd backend && python3 -m uvicorn app.app:app --reload --host 127.0.0.1 --port 8000",
+    "dev:backend": ".venv/bin/python -m uvicorn app.app:app --reload --host 127.0.0.1 --port 8000 --app-dir backend",
     "tauri:dev": "npm run tauri dev"
   },
   "dependencies": {

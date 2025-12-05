@@ -9,10 +9,25 @@ Tu proyecto ahora tiene el backend FastAPI completamente integrado con Tauri. To
 ### Instalar Dependencias del Backend
 
 ```bash
+# Instalar poppler (requerido por pdftotext en macOS)
+brew install poppler
+
+# Instalar dependencias Python
 cd backend
 pip3 install -r requeriments.txt
 cd ..
 ```
+
+**Nota para macOS:** Si no tienes Homebrew instalado, descárgalo de https://brew.sh
+
+**Nota para Linux:**
+```bash
+sudo apt-get install poppler-utils  # Ubuntu/Debian
+sudo yum install poppler-utils       # CentOS/RHEL
+```
+
+**Nota para Windows:**
+Descarga e instala poppler desde https://github.com/oschwartz10612/poppler-windows/releases/
 
 ## 🚀 Probar en Desarrollo
 
