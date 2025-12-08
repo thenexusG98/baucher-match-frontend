@@ -9,6 +9,10 @@ on:
       - feature/empaquetado-fullstack
   workflow_dispatch: # Permite ejecutar manualmente desde GitHub
 
+permissions:
+  contents: write
+  packages: write
+
 env:
   PYTHON_VERSION: '3.9'
   NODE_VERSION: '20'
