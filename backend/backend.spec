@@ -12,17 +12,35 @@ block_cipher = None
 # Obtener el directorio del backend
 backend_dir = Path.cwd()
 
-# Encontrar la ubicación de pdftotext.so en el entorno virtual
-venv_path = backend_dir.parent / '.venv' / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
-pdftotext_so = str(venv_path / f'pdftotext.cpython-{sys.version_info.major}{sys.version_info.minor}-darwin.so')
+# Encontrar la ubicación de pdftotext en el entorno virtual (multiplataforma)
+import platform
+venv_path = backend_dir.parent / '.venv'
 
 # Crear lista de binarios
 binaries_list = []
-if os.path.exists(pdftotext_so):
-    binaries_list.append((pdftotext_so, '.'))
-    print(f"✅ Incluyendo pdftotext desde: {pdftotext_so}")
-else:
-    print(f"⚠️  No se encontró pdftotext en: {pdftotext_so}")
+
+# Detectar sistema operativo y buscar pdftotext
+system = platform.system()
+if system == 'Darwin':  # macOS
+    lib_path = venv_path / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
+    pdftotext_so = str(lib_path / f'pdftotext.cpython-{sys.version_info.major}{sys.version_info.minor}-darwin.so')
+    if os.path.exists(pdftotext_so):
+        binaries_list.append((pdftotext_so, '.'))
+        print(f"✅ Incluyendo pdftotext desde: {pdftotext_so}")
+elif system == 'Windows':  # Windows
+    lib_path = venv_path / 'Lib' / 'site-packages'
+    pdftotext_pyd = str(lib_path / f'pdftotext.cp{sys.version_info.major}{sys.version_info.minor}-win_amd64.pyd')
+    if os.path.exists(pdftotext_pyd):
+        binaries_list.append((pdftotext_pyd, '.'))
+        print(f"✅ Incluyendo pdftotext desde: {pdftotext_pyd}")
+    else:
+        print(f"⚠️  No se encontró pdftotext en: {pdftotext_pyd}")
+elif system == 'Linux':  # Linux
+    lib_path = venv_path / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
+    pdftotext_so = str(lib_path / f'pdftotext.cpython-{sys.version_info.major}{sys.version_info.minor}-x86_64-linux-gnu.so')
+    if os.path.exists(pdftotext_so):
+        binaries_list.append((pdftotext_so, '.'))
+        print(f"✅ Incluyendo pdftotext desde: {pdftotext_so}")
 
 # Analizar el archivo principal
 a = Analysis(
