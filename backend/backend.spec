@@ -50,8 +50,6 @@ a = Analysis(
     datas=[
         # Incluir todo el directorio app
         ('app', 'app'),
-        # Incluir archivos de configuración si existen
-        ('temp', 'temp'),
     ],
     hiddenimports=[
         'uvicorn.logging',
