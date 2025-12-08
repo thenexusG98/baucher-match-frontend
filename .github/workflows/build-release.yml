@@ -70,7 +70,20 @@ jobs:
           Get-ChildItem src-tauri\libs\
 
       - name: Build backend
-        run: npm run build:backend
+        shell: powershell
+        run: |
+          cd backend
+          
+          # Crear directorio de binarios
+          New-Item -ItemType Directory -Force -Path ..\src-tauri\binaries
+          
+          # Compilar con PyInstaller
+          & ..\\.venv\Scripts\pyinstaller.exe --clean --onefile `
+            --name backend-api-x86_64-pc-windows-msvc `
+            --distpath ..\src-tauri\binaries `
+            backend.spec
+          
+          Write-Host "✅ Backend compilado exitosamente" -ForegroundColor Green
 
       - name: Build Tauri app
         run: npm run tauri build
