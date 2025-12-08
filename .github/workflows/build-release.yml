@@ -36,11 +36,13 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Setup Python virtual environment
+        shell: powershell
         run: |
           python -m venv .venv
-          .venv\Scripts\pip install --upgrade pip
-          .venv\Scripts\pip install -r backend\requirements.txt
-          .venv\Scripts\pip install pyinstaller
+          & .venv\Scripts\Activate.ps1
+          python -m pip install --upgrade pip
+          pip install -r backend\requirements.txt
+          pip install pyinstaller
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
