@@ -72,16 +72,14 @@ jobs:
       - name: Build backend
         shell: powershell
         run: |
-          cd backend
-          
           # Crear directorio de binarios
-          New-Item -ItemType Directory -Force -Path ..\src-tauri\binaries
+          New-Item -ItemType Directory -Force -Path "src-tauri\binaries"
           
           # Compilar con PyInstaller
-          & ..\\.venv\Scripts\pyinstaller.exe --clean --onefile `
+          & ".venv\Scripts\pyinstaller.exe" --clean --onefile `
             --name backend-api-x86_64-pc-windows-msvc `
-            --distpath ..\src-tauri\binaries `
-            backend.spec
+            --distpath "src-tauri\binaries" `
+            "backend\backend.spec"
           
           Write-Host "✅ Backend compilado exitosamente" -ForegroundColor Green
 
