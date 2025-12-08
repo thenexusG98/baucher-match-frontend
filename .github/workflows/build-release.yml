@@ -72,16 +72,31 @@ jobs:
       - name: Build backend
         shell: powershell
         run: |
+          # Activar entorno virtual
+          & .venv\Scripts\Activate.ps1
+          
           # Crear directorio de binarios
           New-Item -ItemType Directory -Force -Path "src-tauri\binaries"
           
-          # Compilar con PyInstaller
-          & ".venv\Scripts\pyinstaller.exe" --clean --onefile `
-            --name backend-api-x86_64-pc-windows-msvc `
-            --distpath "src-tauri\binaries" `
-            "backend\backend.spec"
+          # Navegar al directorio backend
+          cd backend
+          
+          # Compilar con PyInstaller usando el spec file (sin opciones adicionales)
+          pyinstaller --clean backend.spec
+          
+          # Renombrar y mover el ejecutable
+          Move-Item -Path "dist\backend-api.exe" -Destination "..\src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe" -Force
           
           Write-Host "✅ Backend compilado exitosamente" -ForegroundColor Green
+          
+          # Verificar que el binario existe
+          if (Test-Path "..\src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe") {
+              Write-Host "✅ Binario creado correctamente" -ForegroundColor Green
+              Get-Item "..\src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe"
+          } else {
+              Write-Host "❌ Error: No se encontró el binario compilado" -ForegroundColor Red
+              exit 1
+          }
 
       - name: Build Tauri app
         run: npm run tauri build
