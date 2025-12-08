@@ -78,23 +78,40 @@ jobs:
           # Crear directorio de binarios
           New-Item -ItemType Directory -Force -Path "src-tauri\binaries"
           
-          # Navegar al directorio backend
-          cd backend
+          # Obtener ruta actual
+          $currentPath = Get-Location
+          Write-Host "Directorio actual: $currentPath"
           
-          # Compilar con PyInstaller usando el spec file (sin opciones adicionales)
+          # Verificar que existe el directorio backend
+          if (Test-Path "backend") {
+              Write-Host "✅ Directorio backend encontrado"
+          } else {
+              Write-Host "❌ Error: Directorio backend no existe"
+              exit 1
+          }
+          
+          # Compilar con PyInstaller usando rutas absolutas
+          Set-Location backend
           pyinstaller --clean backend.spec
+          Set-Location ..
           
           # Renombrar y mover el ejecutable
-          Move-Item -Path "dist\backend-api.exe" -Destination "..\src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe" -Force
-          
-          Write-Host "✅ Backend compilado exitosamente" -ForegroundColor Green
+          if (Test-Path "backend\dist\backend-api.exe") {
+              Move-Item -Path "backend\dist\backend-api.exe" -Destination "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe" -Force
+              Write-Host "✅ Backend compilado exitosamente" -ForegroundColor Green
+          } else {
+              Write-Host "❌ Error: No se encontró backend\dist\backend-api.exe" -ForegroundColor Red
+              Write-Host "Contenido de backend\dist:" -ForegroundColor Yellow
+              Get-ChildItem "backend\dist" -ErrorAction SilentlyContinue
+              exit 1
+          }
           
           # Verificar que el binario existe
-          if (Test-Path "..\src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe") {
-              Write-Host "✅ Binario creado correctamente" -ForegroundColor Green
-              Get-Item "..\src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe"
+          if (Test-Path "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe") {
+              Write-Host "✅ Binario creado correctamente en src-tauri\binaries" -ForegroundColor Green
+              Get-Item "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe"
           } else {
-              Write-Host "❌ Error: No se encontró el binario compilado" -ForegroundColor Red
+              Write-Host "❌ Error: No se encontró el binario en src-tauri\binaries" -ForegroundColor Red
               exit 1
           }
 
