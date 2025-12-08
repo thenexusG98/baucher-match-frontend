@@ -26,21 +26,21 @@ if system == 'Darwin':  # macOS
     pdftotext_so = str(lib_path / f'pdftotext.cpython-{sys.version_info.major}{sys.version_info.minor}-darwin.so')
     if os.path.exists(pdftotext_so):
         binaries_list.append((pdftotext_so, '.'))
-        print(f"✅ Incluyendo pdftotext desde: {pdftotext_so}")
+        print(f"OK Incluyendo pdftotext desde: {pdftotext_so}")
 elif system == 'Windows':  # Windows
     lib_path = venv_path / 'Lib' / 'site-packages'
     pdftotext_pyd = str(lib_path / f'pdftotext.cp{sys.version_info.major}{sys.version_info.minor}-win_amd64.pyd')
     if os.path.exists(pdftotext_pyd):
         binaries_list.append((pdftotext_pyd, '.'))
-        print(f"✅ Incluyendo pdftotext desde: {pdftotext_pyd}")
+        print(f"OK Incluyendo pdftotext desde: {pdftotext_pyd}")
     else:
-        print(f"⚠️  No se encontró pdftotext en: {pdftotext_pyd}")
+        print(f"WARNING No se encontro pdftotext en: {pdftotext_pyd}")
 elif system == 'Linux':  # Linux
     lib_path = venv_path / 'lib' / f'python{sys.version_info.major}.{sys.version_info.minor}' / 'site-packages'
     pdftotext_so = str(lib_path / f'pdftotext.cpython-{sys.version_info.major}{sys.version_info.minor}-x86_64-linux-gnu.so')
     if os.path.exists(pdftotext_so):
         binaries_list.append((pdftotext_so, '.'))
-        print(f"✅ Incluyendo pdftotext desde: {pdftotext_so}")
+        print(f"OK Incluyendo pdftotext desde: {pdftotext_so}")
 
 # Analizar el archivo principal
 a = Analysis(
