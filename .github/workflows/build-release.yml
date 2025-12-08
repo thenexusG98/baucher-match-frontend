@@ -14,152 +14,6 @@ env:
   NODE_VERSION: '20'
 
 jobs:
-  build-macos:
-    name: Build macOS (Apple Silicon & Intel)
-    runs-on: macos-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install system dependencies (Poppler)
-        run: |
-          brew install poppler
-
-      - name: Install Node dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Setup Python virtual environment
-        run: |
-          python3 -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r backend/requirements.txt
-          .venv/bin/pip install pyinstaller
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Build backend
-        run: npm run build:backend
-
-      - name: Bundle system libraries
-        run: npm run build:libs
-
-      - name: Build Tauri app
-        run: npm run tauri build
-
-      - name: Rename artifacts
-        run: |
-          cd src-tauri/target/release/bundle/dmg
-          for file in *.dmg; do
-            mv "$file" "baucher-match-macos-$(uname -m)-${GITHUB_SHA::7}.dmg"
-          done
-
-      - name: Upload macOS DMG
-        uses: actions/upload-artifact@v4
-        with:
-          name: baucher-match-macos-${{ runner.arch }}
-          path: src-tauri/target/release/bundle/dmg/*.dmg
-          retention-days: 30
-
-  build-ubuntu:
-    name: Build Linux (Ubuntu)
-    runs-on: ubuntu-22.04
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libpoppler-cpp-dev \
-            libpoppler-glib-dev \
-            poppler-utils
-
-      - name: Install Node dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Setup Python virtual environment
-        run: |
-          python3 -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r backend/requirements.txt
-          .venv/bin/pip install pyinstaller
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Build backend
-        run: npm run build:backend
-
-      - name: Bundle system libraries
-        run: npm run build:libs
-
-      - name: Build Tauri app
-        run: npm run tauri build
-
-      - name: Rename artifacts
-        run: |
-          cd src-tauri/target/release/bundle/appimage
-          for file in *.AppImage; do
-            mv "$file" "baucher-match-linux-${GITHUB_SHA::7}.AppImage"
-          done
-
-      - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: baucher-match-linux
-          path: src-tauri/target/release/bundle/appimage/*.AppImage
-          retention-days: 30
-
-      - name: Upload Debian package
-        uses: actions/upload-artifact@v4
-        with:
-          name: baucher-match-linux-deb
-          path: src-tauri/target/release/bundle/deb/*.deb
-          retention-days: 30
-
   build-windows:
     name: Build Windows
     runs-on: windows-latest
@@ -242,7 +96,7 @@ jobs:
 
   create-release:
     name: Create Release
-    needs: [build-macos, build-ubuntu, build-windows]
+    needs: [build-windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     
@@ -270,14 +124,6 @@ jobs:
             
             ### 📦 Instaladores Disponibles:
             
-            #### 🍎 macOS
-            - **Apple Silicon (M1/M2/M3)**: `baucher-match-macos-arm64-*.dmg`
-            - **Intel**: `baucher-match-macos-x86_64-*.dmg`
-            
-            #### 🐧 Linux
-            - **AppImage** (universal): `baucher-match-linux-*.AppImage`
-            - **Debian/Ubuntu**: `baucher-match-*.deb`
-            
             #### 🪟 Windows
             - **MSI Installer**: `baucher-match-windows-*.msi`
             - **NSIS Installer**: `baucher-match-windows-*.exe`
@@ -296,18 +142,6 @@ jobs:
             
             ### 📝 Instalación
             
-            **macOS:**
-            1. Descargar el `.dmg` apropiado para tu procesador
-            2. Abrir el archivo
-            3. Arrastrar a Aplicaciones
-            4. Clic derecho → Abrir (primera vez)
-            
-            **Linux:**
-            ```bash
-            chmod +x baucher-match-linux-*.AppImage
-            ./baucher-match-linux-*.AppImage
-            ```
-            
             **Windows:**
             1. Descargar el `.msi` o `.exe`
             2. Ejecutar el instalador
@@ -321,9 +155,6 @@ jobs:
           draft: false
           prerelease: true
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.AppImage
-            artifacts/**/*.deb
             artifacts/**/*.msi
             artifacts/**/*.exe
         env:
