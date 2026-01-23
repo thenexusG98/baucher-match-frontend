@@ -404,19 +404,73 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     
     log_to_file(&format!("✓ Backend encontrado, iniciando proceso..."));
     
+    // Obtener el directorio de libs para las DLLs de Poppler
+    let libs_dir = if let Ok(resource_dir) = app_handle.path().resource_dir() {
+        resource_dir.join("libs")
+    } else {
+        PathBuf::from("libs")
+    };
+    
+    log_to_file(&format!("📁 Directorio de libs: {:?}", libs_dir));
+    
+    // En Windows, agregar el directorio de libs al PATH para que encuentre las DLLs
+    #[cfg(target_os = "windows")]
+    let path_var = if libs_dir.exists() {
+        use std::env;
+        let mut paths = vec![libs_dir.to_string_lossy().to_string()];
+        if let Ok(existing_path) = env::var("PATH") {
+            paths.push(existing_path);
+        }
+        let new_path = paths.join(";");
+        log_to_file(&format!("PATH actualizado con libs: {}", new_path));
+        Some(("PATH", new_path))
+    } else {
+        log_to_file(&format!("⚠️ Directorio de libs no existe: {:?}", libs_dir));
+        None
+    };
+    
     // Iniciar proceso
-    let child = Command::new(&backend_path)
-        .spawn()
+    let mut cmd = Command::new(&backend_path);
+    
+    #[cfg(target_os = "windows")]
+    if let Some((key, value)) = path_var {
+        cmd.env(key, value);
+    }
+    
+    let child = cmd.spawn()
         .map_err(|e| {
             let error_msg = format!("Error al iniciar backend: {}. Ruta: {:?}", e, backend_path);
             log_to_file(&error_msg);
             error_msg
         })?;
     
-    let success_msg = format!("✅ Backend iniciado con PID: {:?}", child.id());
+    let pid = child.id();
+    let success_msg = format!("✅ Backend iniciado con PID: {}", pid);
     log_to_file(&success_msg);
     
     *child_lock = Some(child);
+    
+    // Esperar un momento para verificar que el proceso no falle inmediatamente
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    
+    // Verificar si el proceso sigue vivo
+    if let Some(ref mut child) = *child_lock {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let error_msg = format!("⚠️ El backend terminó inmediatamente con código: {:?}", status);
+                log_to_file(&error_msg);
+                *child_lock = None;
+                return Err(format!("El backend falló al iniciar. Código de salida: {:?}. Revisa los logs en AppData\\Roaming\\BaucherMatch\\logs", status));
+            }
+            Ok(None) => {
+                log_to_file(&format!("✓ Backend corriendo correctamente con PID: {}", pid));
+            }
+            Err(e) => {
+                log_to_file(&format!("⚠️ Error verificando estado del backend: {}", e));
+            }
+        }
+    }
+    
     Ok("Backend iniciado correctamente en http://127.0.0.1:8000".to_string())
 }
 
