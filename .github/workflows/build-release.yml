@@ -92,28 +92,28 @@ jobs:
           
           # Verificar que existe el directorio backend
           if (Test-Path "backend") {
-              Write-Host "✅ Directorio backend encontrado" -ForegroundColor Green
+              Write-Host "[OK] Directorio backend encontrado" -ForegroundColor Green
               Write-Host "Contenido de backend:" -ForegroundColor Yellow
               Get-ChildItem backend | Select-Object Name, Length | Format-Table
           } else {
-              Write-Host "❌ Error: Directorio backend no existe" -ForegroundColor Red
+              Write-Host "[ERROR] Directorio backend no existe" -ForegroundColor Red
               exit 1
           }
           
           # Verificar que existe backend.spec
           if (Test-Path "backend\backend.spec") {
-              Write-Host "✅ backend.spec encontrado" -ForegroundColor Green
+              Write-Host "[OK] backend.spec encontrado" -ForegroundColor Green
           } else {
-              Write-Host "❌ Error: backend\backend.spec no existe" -ForegroundColor Red
+              Write-Host "[ERROR] backend\backend.spec no existe" -ForegroundColor Red
               Write-Host "Creando backend.spec básico..." -ForegroundColor Yellow
               exit 1
           }
           
           # Verificar que existe main.py
           if (Test-Path "backend\main.py") {
-              Write-Host "✅ main.py encontrado" -ForegroundColor Green
+              Write-Host "[OK] main.py encontrado" -ForegroundColor Green
           } else {
-              Write-Host "❌ Error: backend\main.py no existe" -ForegroundColor Red
+              Write-Host "[ERROR] backend\main.py no existe" -ForegroundColor Red
               exit 1
           }
           
@@ -148,11 +148,11 @@ jobs:
           
           # Verificar que se creó el directorio dist
           if (Test-Path "backend\dist") {
-              Write-Host "`n✅ Directorio backend\dist creado" -ForegroundColor Green
+              Write-Host "`n[OK] Directorio backend\dist creado" -ForegroundColor Green
               Write-Host "Contenido de backend\dist:" -ForegroundColor Yellow
               Get-ChildItem "backend\dist" -Recurse | Select-Object FullName, Length | Format-Table
           } else {
-              Write-Host "`n❌ Error: No se creó backend\dist" -ForegroundColor Red
+              Write-Host "`n[ERROR] No se creo backend\dist" -ForegroundColor Red
               Write-Host "Log de PyInstaller:" -ForegroundColor Yellow
               if (Test-Path "pyinstaller-build.log") {
                   Get-Content "pyinstaller-build.log" | Select-Object -Last 50
@@ -161,7 +161,7 @@ jobs:
           }
           
           if ($pyinstallerExitCode -ne 0) {
-              Write-Host "❌ PyInstaller falló con código de salida: $pyinstallerExitCode" -ForegroundColor Red
+              Write-Host "[ERROR] PyInstaller fallo con codigo de salida: $pyinstallerExitCode" -ForegroundColor Red
               exit 1
           }
           
@@ -179,7 +179,7 @@ jobs:
               Write-Host "Verificando: $path" -ForegroundColor Gray
               if (Test-Path $path) {
                   $backendExe = $path
-                  Write-Host "✅ Encontrado: $path" -ForegroundColor Green
+                  Write-Host "[OK] Encontrado: $path" -ForegroundColor Green
                   $fileInfo = Get-Item $path
                   Write-Host "Tamaño: $($fileInfo.Length) bytes" -ForegroundColor Yellow
                   break
@@ -187,7 +187,7 @@ jobs:
           }
           
           if (-not $backendExe) {
-              Write-Host "`n❌ Error: No se encontró el ejecutable del backend" -ForegroundColor Red
+              Write-Host "`n[ERROR] No se encontro el ejecutable del backend" -ForegroundColor Red
               Write-Host "Estructura completa de backend\dist:" -ForegroundColor Yellow
               if (Test-Path "backend\dist") {
                   Get-ChildItem "backend\dist" -Recurse | Select-Object FullName, Length | Format-Table -AutoSize
@@ -204,19 +204,19 @@ jobs:
           # Copiar con ambos nombres
           Write-Host "`nCopiando binarios..." -ForegroundColor Cyan
           Copy-Item -Path $backendExe -Destination "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe" -Force
-          Write-Host "✅ Backend copiado a: backend-api-x86_64-pc-windows-msvc.exe" -ForegroundColor Green
+          Write-Host "[OK] Backend copiado a: backend-api-x86_64-pc-windows-msvc.exe" -ForegroundColor Green
           
           Copy-Item -Path $backendExe -Destination "src-tauri\binaries\backend-api.exe" -Force
-          Write-Host "✅ Backend copiado a: backend-api.exe" -ForegroundColor Green
+          Write-Host "[OK] Backend copiado a: backend-api.exe" -ForegroundColor Green
           
           # Verificar que los binarios existen
           Write-Host "`nVerificando binarios creados:" -ForegroundColor Cyan
           if (Test-Path "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe") {
-              Write-Host "✅ backend-api-x86_64-pc-windows-msvc.exe" -ForegroundColor Green
+              Write-Host "[OK] backend-api-x86_64-pc-windows-msvc.exe" -ForegroundColor Green
               Get-Item "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe" | Format-List Name, Length, LastWriteTime
           }
           if (Test-Path "src-tauri\binaries\backend-api.exe") {
-              Write-Host "✅ backend-api.exe" -ForegroundColor Green
+              Write-Host "[OK] backend-api.exe" -ForegroundColor Green
               Get-Item "src-tauri\binaries\backend-api.exe" | Format-List Name, Length, LastWriteTime
           }
           
@@ -227,12 +227,12 @@ jobs:
       - name: Verify binaries before Tauri build
         shell: powershell
         run: |
-          Write-Host "=== VERIFICACIÓN FINAL ANTES DEL BUILD DE TAURI ===" -ForegroundColor Magenta
+          Write-Host "=== VERIFICACION FINAL ANTES DEL BUILD DE TAURI ===" -ForegroundColor Magenta
           Write-Host "`nContenido de src-tauri\binaries:" -ForegroundColor Cyan
           if (Test-Path "src-tauri\binaries") {
               Get-ChildItem "src-tauri\binaries" -Force | Format-Table Name, Length, LastWriteTime, FullName
               
-              Write-Host "`nVerificando archivos específicos:" -ForegroundColor Yellow
+              Write-Host "`nVerificando archivos especificos:" -ForegroundColor Yellow
               $files = @(
                   "src-tauri\binaries\backend-api.exe",
                   "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe"
@@ -241,13 +241,13 @@ jobs:
               foreach ($file in $files) {
                   if (Test-Path $file) {
                       $info = Get-Item $file
-                      Write-Host "✅ $($file): $($info.Length) bytes" -ForegroundColor Green
+                      Write-Host "[OK] $($file): $($info.Length) bytes" -ForegroundColor Green
                   } else {
-                      Write-Host "❌ $($file): NO EXISTE" -ForegroundColor Red
+                      Write-Host "[ERROR] $($file): NO EXISTE" -ForegroundColor Red
                   }
               }
           } else {
-              Write-Host "❌ El directorio src-tauri\binaries NO EXISTE" -ForegroundColor Red
+              Write-Host "[ERROR] El directorio src-tauri\binaries NO EXISTE" -ForegroundColor Red
               exit 1
           }
 
@@ -267,15 +267,15 @@ jobs:
           
           # Verificar si hay un directorio con los binarios externos
           if (Test-Path "$bundlePath\binaries") {
-              Write-Host "`n✅ Directorio binaries encontrado en release:" -ForegroundColor Green
+              Write-Host "`n[OK] Directorio binaries encontrado en release:" -ForegroundColor Green
               Get-ChildItem "$bundlePath\binaries" -Recurse | Format-Table Name, Length
           } else {
-              Write-Host "`n❌ NO se encontró directorio binaries en release" -ForegroundColor Red
+              Write-Host "`n[ERROR] NO se encontro directorio binaries en release" -ForegroundColor Red
           }
           
           # Verificar el ejecutable principal
           if (Test-Path "$bundlePath\baucher-match-frontend.exe") {
-              Write-Host "`n✅ Ejecutable principal encontrado" -ForegroundColor Green
+              Write-Host "`n[OK] Ejecutable principal encontrado" -ForegroundColor Green
           }
           
           # Listar todo el bundle
