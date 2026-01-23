@@ -471,6 +471,27 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
         }
     }
     
+    // Segunda verificación después de 5 segundos (tiempo para que uvicorn inicie)
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    
+    if let Some(ref mut child) = *child_lock {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let error_msg = format!("⚠️ El backend terminó después de 5 segundos con código: {:?}", status);
+                log_to_file(&error_msg);
+                log_to_file("💡 Posible causa: Error al iniciar uvicorn o al cargar módulos de Python");
+                *child_lock = None;
+                return Err(format!("El backend falló después de iniciar. Código de salida: {:?}. Revisa los logs del backend en AppData\\Roaming\\BaucherMatch\\logs", status));
+            }
+            Ok(None) => {
+                log_to_file("✓ Backend sigue activo después de 5 segundos - uvicorn probablemente iniciado correctamente");
+            }
+            Err(e) => {
+                log_to_file(&format!("⚠️ Error en segunda verificación: {}", e));
+            }
+        }
+    }
+    
     Ok("Backend iniciado correctamente en http://127.0.0.1:8000".to_string())
 }
 

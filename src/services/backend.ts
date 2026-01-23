@@ -56,15 +56,20 @@ export class BackendService {
   async waitForReady(maxAttempts: number = 30, delayMs: number = 1000): Promise<boolean> {
     console.log('⏳ Esperando que el backend esté listo...');
     
+    // Dar tiempo inicial para que uvicorn inicie (especialmente en producción)
+    console.log('⏱️ Esperando 3 segundos para que uvicorn inicie...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
     for (let i = 0; i < maxAttempts; i++) {
       try {
         const response = await fetch(this.healthEndpoint, {
           method: 'GET',
-          signal: AbortSignal.timeout(2000), // 2 segundos de timeout
+          signal: AbortSignal.timeout(3000), // 3 segundos de timeout
         });
         
         if (response.ok) {
-          console.log('✅ Backend está listo y respondiendo');
+          const data = await response.json();
+          console.log('✅ Backend está listo y respondiendo:', data);
           return true;
         }
       } catch (error) {
@@ -72,6 +77,7 @@ export class BackendService {
         if (i === maxAttempts - 1) {
           console.error('❌ Backend no respondió después de', maxAttempts, 'intentos');
           console.error('Error:', error);
+          console.error('URL intentada:', this.healthEndpoint);
         } else {
           console.log(`⏳ Intento ${i + 1}/${maxAttempts}... esperando...`);
         }
