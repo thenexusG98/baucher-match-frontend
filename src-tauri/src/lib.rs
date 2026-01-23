@@ -4,6 +4,9 @@ use std::sync::Mutex;
 use tauri::{State, Manager};
 use std::path::PathBuf;
 use std::process::{Command, Child};
+use std::fs::{OpenOptions, create_dir_all};
+use std::io::Write;
+use chrono::Local;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProcessedStatement {
@@ -22,6 +25,39 @@ pub struct DbState {
 
 pub struct BackendProcess {
     child: Mutex<Option<Child>>,
+}
+
+// Función para escribir logs
+fn log_to_file(message: &str) {
+    if let Some(log_path) = get_log_path() {
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+            let _ = writeln!(file, "[{}] {}", timestamp, message);
+        }
+    }
+    // También imprimir en consola
+    println!("{}", message);
+}
+
+// Obtener la ruta del archivo de log
+fn get_log_path() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    let log_dir = dirs::home_dir()?.join("Library").join("Logs").join("BaucherMatch");
+    
+    #[cfg(target_os = "windows")]
+    let log_dir = dirs::data_dir()?.join("BaucherMatch").join("logs");
+    
+    #[cfg(target_os = "linux")]
+    let log_dir = dirs::home_dir()?.join(".local").join("share").join("BaucherMatch").join("logs");
+    
+    let _ = create_dir_all(&log_dir);
+    
+    let today = Local::now().format("%Y%m%d");
+    Some(log_dir.join(format!("tauri_{}.log", today)))
 }
 
 fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -236,6 +272,14 @@ fn get_database_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     Ok(db_path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+fn get_log_path_command() -> Result<String, String> {
+    match get_log_path() {
+        Some(path) => Ok(path.to_string_lossy().to_string()),
+        None => Err("No se pudo determinar la ruta de logs".to_string())
+    }
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -244,9 +288,16 @@ fn greet(name: &str) -> String {
 
 #[tauri::command]
 fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> Result<String, String> {
-    let mut child_lock = state.child.lock().map_err(|e| e.to_string())?;
+    log_to_file("Intentando iniciar backend...");
+    
+    let mut child_lock = state.child.lock().map_err(|e| {
+        let error_msg = format!("Error al obtener lock del backend: {}", e);
+        log_to_file(&error_msg);
+        error_msg
+    })?;
     
     if child_lock.is_some() {
+        log_to_file("Backend ya está corriendo");
         return Ok("Backend ya está corriendo".to_string());
     }
     
@@ -254,24 +305,35 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     let backend_path = app_handle
         .path()
         .resolve("binaries/backend-api", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| format!("No se pudo obtener ruta del backend: {}", e))?;
+        .map_err(|e| {
+            let error_msg = format!("No se pudo obtener ruta del backend: {}", e);
+            log_to_file(&error_msg);
+            error_msg
+        })?;
     
-    println!("🚀 Iniciando backend desde: {:?}", backend_path);
+    log_to_file(&format!("🚀 Iniciando backend desde: {:?}", backend_path));
     
     // Verificar que el archivo existe
     if !backend_path.exists() {
-        return Err(format!(
+        let error_msg = format!(
             "El ejecutable del backend no existe en: {:?}. Asegúrate de ejecutar ./build-backend.sh primero.",
             backend_path
-        ));
+        );
+        log_to_file(&error_msg);
+        return Err(error_msg);
     }
     
     // Iniciar proceso
     let child = Command::new(&backend_path)
         .spawn()
-        .map_err(|e| format!("Error al iniciar backend: {}. Ruta: {:?}", e, backend_path))?;
+        .map_err(|e| {
+            let error_msg = format!("Error al iniciar backend: {}. Ruta: {:?}", e, backend_path);
+            log_to_file(&error_msg);
+            error_msg
+        })?;
     
-    println!("✅ Backend iniciado con PID: {:?}", child.id());
+    let success_msg = format!("✅ Backend iniciado con PID: {:?}", child.id());
+    log_to_file(&success_msg);
     
     *child_lock = Some(child);
     Ok("Backend iniciado correctamente en http://127.0.0.1:8000".to_string())
@@ -279,11 +341,21 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
 
 #[tauri::command]
 fn stop_backend(state: State<BackendProcess>) -> Result<String, String> {
-    let mut child_lock = state.child.lock().map_err(|e| e.to_string())?;
+    log_to_file("Intentando detener backend...");
+    
+    let mut child_lock = state.child.lock().map_err(|e| {
+        let error_msg = format!("Error al obtener lock del backend: {}", e);
+        log_to_file(&error_msg);
+        error_msg
+    })?;
     
     if let Some(mut child) = child_lock.take() {
-        child.kill().map_err(|e| format!("Error al detener backend: {}", e))?;
-        println!("🛑 Backend detenido");
+        child.kill().map_err(|e| {
+            let error_msg = format!("Error al detener backend: {}", e);
+            log_to_file(&error_msg);
+            error_msg
+        })?;
+        log_to_file("🛑 Backend detenido correctamente");
         Ok("Backend detenido".to_string())
     } else {
         Ok("Backend no está corriendo".to_string())
@@ -298,17 +370,31 @@ fn check_backend_status(state: State<BackendProcess>) -> Result<bool, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    log_to_file("=== Iniciando aplicación BaucherMatch ===");
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            log_to_file("Configurando aplicación...");
+            
             let db_path = get_db_path(&app.handle())?;
-            println!("Database path: {:?}", db_path);
+            log_to_file(&format!("Database path: {:?}", db_path));
             
             let conn = Connection::open(&db_path)
-                .map_err(|e| format!("Failed to open database: {}", e))?;
+                .map_err(|e| {
+                    let error_msg = format!("Failed to open database: {}", e);
+                    log_to_file(&error_msg);
+                    error_msg
+                })?;
             
             init_database(&conn)
-                .map_err(|e| format!("Failed to initialize database: {}", e))?;
+                .map_err(|e| {
+                    let error_msg = format!("Failed to initialize database: {}", e);
+                    log_to_file(&error_msg);
+                    error_msg
+                })?;
+            
+            log_to_file("Base de datos inicializada correctamente");
             
             app.manage(DbState {
                 conn: Mutex::new(conn),
@@ -319,6 +405,7 @@ pub fn run() {
                 child: Mutex::new(None),
             });
             
+            log_to_file("Setup completado exitosamente");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -333,15 +420,18 @@ pub fn run() {
             get_database_path,
             start_backend,
             stop_backend,
-            check_backend_status
+            check_backend_status,
+            get_log_path_command
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
+                log_to_file("Cerrando aplicación...");
                 // Detener backend al cerrar ventana
                 let app = window.app_handle();
                 if let Some(backend_state) = app.try_state::<BackendProcess>() {
                     let _ = stop_backend(backend_state);
                 }
+                log_to_file("Backend detenido");
             }
         })
         .run(tauri::generate_context!())
