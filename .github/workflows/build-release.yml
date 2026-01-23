@@ -224,8 +224,63 @@ jobs:
           Write-Host "`nContenido completo de src-tauri\binaries:" -ForegroundColor Cyan
           Get-ChildItem "src-tauri\binaries" -Recurse | Format-Table Name, Length, LastWriteTime
 
+      - name: Verify binaries before Tauri build
+        shell: powershell
+        run: |
+          Write-Host "=== VERIFICACIÓN FINAL ANTES DEL BUILD DE TAURI ===" -ForegroundColor Magenta
+          Write-Host "`nContenido de src-tauri\binaries:" -ForegroundColor Cyan
+          if (Test-Path "src-tauri\binaries") {
+              Get-ChildItem "src-tauri\binaries" -Force | Format-Table Name, Length, LastWriteTime, FullName
+              
+              Write-Host "`nVerificando archivos específicos:" -ForegroundColor Yellow
+              $files = @(
+                  "src-tauri\binaries\backend-api.exe",
+                  "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe"
+              )
+              
+              foreach ($file in $files) {
+                  if (Test-Path $file) {
+                      $info = Get-Item $file
+                      Write-Host "✅ $($file): $($info.Length) bytes" -ForegroundColor Green
+                  } else {
+                      Write-Host "❌ $($file): NO EXISTE" -ForegroundColor Red
+                  }
+              }
+          } else {
+              Write-Host "❌ El directorio src-tauri\binaries NO EXISTE" -ForegroundColor Red
+              exit 1
+          }
+
       - name: Build Tauri app
         run: npm run tauri build
+
+      - name: Verify Tauri bundle contents
+        shell: powershell
+        run: |
+          Write-Host "=== VERIFICACIÓN DEL BUNDLE DE TAURI ===" -ForegroundColor Magenta
+          
+          # Buscar el directorio de instalación de la app
+          $bundlePath = "src-tauri\target\release"
+          
+          Write-Host "`nContenido de $bundlePath:" -ForegroundColor Cyan
+          Get-ChildItem $bundlePath -Directory | Format-Table Name
+          
+          # Verificar si hay un directorio con los binarios externos
+          if (Test-Path "$bundlePath\binaries") {
+              Write-Host "`n✅ Directorio binaries encontrado en release:" -ForegroundColor Green
+              Get-ChildItem "$bundlePath\binaries" -Recurse | Format-Table Name, Length
+          } else {
+              Write-Host "`n❌ NO se encontró directorio binaries en release" -ForegroundColor Red
+          }
+          
+          # Verificar el ejecutable principal
+          if (Test-Path "$bundlePath\baucher-match-frontend.exe") {
+              Write-Host "`n✅ Ejecutable principal encontrado" -ForegroundColor Green
+          }
+          
+          # Listar todo el bundle
+          Write-Host "`nEstructura completa del release:" -ForegroundColor Cyan
+          Get-ChildItem $bundlePath -Recurse -Depth 2 | Select-Object FullName | Format-Table
 
       - name: Rename artifacts
         shell: powershell
