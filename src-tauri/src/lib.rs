@@ -301,42 +301,68 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
         return Ok("Backend ya está corriendo".to_string());
     }
     
-    // Determinar el nombre del binario según la plataforma
-    #[cfg(target_os = "windows")]
-    let binary_name = "backend-api-x86_64-pc-windows-msvc.exe";
+    use tauri::Manager;
     
-    #[cfg(target_os = "macos")]
-    let binary_name = if cfg!(target_arch = "aarch64") {
-        "backend-api-aarch64-apple-darwin"
-    } else {
-        "backend-api-x86_64-apple-darwin"
-    };
+    log_to_file("Resolviendo ruta del backend...");
+    
+    // En Tauri 2.0, los binarios externos se empaquetan en el directorio de recursos
+    // Necesitamos construir manualmente la ruta con el sufijo de plataforma correcto
+    #[cfg(target_os = "windows")]
+    let binary_filename = "backend-api-x86_64-pc-windows-msvc.exe";
+    
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    let binary_filename = "backend-api-aarch64-apple-darwin";
+    
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let binary_filename = "backend-api-x86_64-apple-darwin";
     
     #[cfg(target_os = "linux")]
-    let binary_name = "backend-api-x86_64-unknown-linux-gnu";
+    let binary_filename = "backend-api-x86_64-unknown-linux-gnu";
     
-    log_to_file(&format!("Buscando binario: {}", binary_name));
+    log_to_file(&format!("Buscando binario: {}", binary_filename));
     
-    // Obtener ruta del sidecar usando el API de Tauri
+    // Resolver la ruta completa del binario
     let backend_path = app_handle
         .path()
-        .resolve(format!("binaries/{}", binary_name), tauri::path::BaseDirectory::Resource)
+        .resolve(
+            PathBuf::from("binaries").join(binary_filename),
+            tauri::path::BaseDirectory::Resource
+        )
         .map_err(|e| {
-            let error_msg = format!("No se pudo obtener ruta del backend: {}", e);
+            let error_msg = format!("Error al resolver ruta del backend: {}", e);
             log_to_file(&error_msg);
             error_msg
         })?;
     
-    log_to_file(&format!("🚀 Ruta resuelta del backend: {:?}", backend_path));
+    log_to_file(&format!("🚀 Ruta del backend resuelta: {:?}", backend_path));
     
     // Verificar que el archivo existe
     if !backend_path.exists() {
         // Intentar listar los archivos en el directorio para debugging
         if let Some(parent) = backend_path.parent() {
             log_to_file(&format!("Listando archivos en: {:?}", parent));
-            if let Ok(entries) = std::fs::read_dir(parent) {
-                for entry in entries.flatten() {
-                    log_to_file(&format!("  - {:?}", entry.file_name()));
+            
+            // Verificar si el directorio padre existe
+            if !parent.exists() {
+                log_to_file(&format!("ERROR: El directorio {:?} NO EXISTE", parent));
+            } else {
+                log_to_file(&format!("El directorio {:?} SI existe", parent));
+                
+                if let Ok(entries) = std::fs::read_dir(parent) {
+                    let mut count = 0;
+                    for entry in entries.flatten() {
+                        count += 1;
+                        let metadata = entry.metadata();
+                        let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+                        log_to_file(&format!("  [{}] Archivo: {:?} (Tamaño: {} bytes)", count, entry.file_name(), size));
+                    }
+                    if count == 0 {
+                        log_to_file("  ⚠️ El directorio está VACÍO - no hay archivos");
+                    } else {
+                        log_to_file(&format!("  Total de archivos encontrados: {}", count));
+                    }
+                } else {
+                    log_to_file("  ERROR: No se pudo leer el directorio");
                 }
             }
         }

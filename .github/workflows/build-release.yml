@@ -228,7 +228,7 @@ jobs:
         shell: powershell
         run: |
           Write-Host "=== VERIFICACION FINAL ANTES DEL BUILD DE TAURI ===" -ForegroundColor Magenta
-          Write-Host "`nContenido de src-tauri\binaries:" -ForegroundColor Cyan
+          Write-Host "`nContenido de src-tauri\binaries" -ForegroundColor Cyan
           if (Test-Path "src-tauri\binaries") {
               Get-ChildItem "src-tauri\binaries" -Force | Format-Table Name, Length, LastWriteTime, FullName
               
@@ -238,14 +238,23 @@ jobs:
                   "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe"
               )
               
+              $allFilesExist = $true
               foreach ($file in $files) {
                   if (Test-Path $file) {
                       $info = Get-Item $file
                       Write-Host "[OK] $($file): $($info.Length) bytes" -ForegroundColor Green
                   } else {
                       Write-Host "[ERROR] $($file): NO EXISTE" -ForegroundColor Red
+                      $allFilesExist = $false
                   }
               }
+              
+              if (-not $allFilesExist) {
+                  Write-Host "`n[ERROR] Faltan archivos binarios necesarios" -ForegroundColor Red
+                  exit 1
+              }
+              
+              Write-Host "`n[OK] Todos los binarios necesarios existen" -ForegroundColor Green
           } else {
               Write-Host "[ERROR] El directorio src-tauri\binaries NO EXISTE" -ForegroundColor Red
               exit 1
@@ -270,7 +279,7 @@ jobs:
               Write-Host "`n[OK] Directorio binaries encontrado en release" -ForegroundColor Green
               Get-ChildItem "$bundlePath\binaries" -Recurse | Format-Table Name, Length
           } else {
-              Write-Host "`n[ERROR] NO se encontro directorio binaries en release" -ForegroundColor Red
+              Write-Host "`n[WARNING] NO se encontro directorio binaries en release" -ForegroundColor Yellow
           }
           
           # Verificar el ejecutable principal
@@ -278,9 +287,17 @@ jobs:
               Write-Host "`n[OK] Ejecutable principal encontrado" -ForegroundColor Green
           }
           
-          # Listar todo el bundle
-          Write-Host "`nEstructura completa del release" -ForegroundColor Cyan
-          Get-ChildItem $bundlePath -Recurse -Depth 2 | Select-Object FullName | Format-Table
+          # Buscar archivos relacionados con backend en el bundle
+          Write-Host "`nBuscando archivos de backend en el bundle" -ForegroundColor Cyan
+          Get-ChildItem $bundlePath -Recurse -Include "*backend*" -ErrorAction SilentlyContinue | 
+              Select-Object FullName, Length | Format-Table
+          
+          # Verificar el MSI generado
+          $msiPath = "src-tauri\target\release\bundle\msi"
+          if (Test-Path $msiPath) {
+              Write-Host "`nArchivos MSI generados" -ForegroundColor Cyan
+              Get-ChildItem $msiPath -Filter "*.msi" | Select-Object Name, Length, LastWriteTime | Format-Table
+          }
 
       - name: Rename artifacts
         shell: powershell
