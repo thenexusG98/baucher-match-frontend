@@ -305,6 +305,31 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     
     log_to_file("Resolviendo ruta del backend...");
     
+    // Debug: Mostrar todos los directorios base de Tauri
+    if let Ok(resource_dir) = app_handle.path().resource_dir() {
+        log_to_file(&format!("📁 Resource Dir: {:?}", resource_dir));
+        
+        // Listar contenido del resource dir
+        if resource_dir.exists() {
+            log_to_file("Contenido del Resource Dir:");
+            if let Ok(entries) = std::fs::read_dir(&resource_dir) {
+                for entry in entries.flatten() {
+                    log_to_file(&format!("  - {:?}", entry.file_name()));
+                }
+            }
+        } else {
+            log_to_file("⚠️ Resource Dir NO EXISTE");
+        }
+    }
+    
+    if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
+        log_to_file(&format!("📁 App Data Dir: {:?}", app_data_dir));
+    }
+    
+    if let Ok(app_local_dir) = app_handle.path().app_local_data_dir() {
+        log_to_file(&format!("📁 App Local Data Dir: {:?}", app_local_dir));
+    }
+    
     // En Tauri 2.0, los binarios externos se empaquetan en el directorio de recursos
     // Necesitamos construir manualmente la ruta con el sufijo de plataforma correcto
     #[cfg(target_os = "windows")]

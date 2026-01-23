@@ -261,7 +261,9 @@ jobs:
           }
 
       - name: Build Tauri app
-        run: npm run tauri build
+        env:
+          TAURI_BUNDLER_WIX_INCLUDE_BINARIES: "true"
+        run: npm run tauri build -- --verbose
 
       - name: Verify Tauri bundle contents
         shell: powershell
