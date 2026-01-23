@@ -14,7 +14,7 @@ permissions:
   packages: write
 
 env:
-  PYTHON_VERSION: '3.9'
+  PYTHON_VERSION: '3.11'
   NODE_VERSION: '20'
 
 jobs:
@@ -122,16 +122,27 @@ jobs:
           # Compilar con PyInstaller usando rutas absolutas
           Set-Location backend
           
+          # Mostrar información del entorno
+          Write-Host "Python version:" -ForegroundColor Yellow
+          python --version
+          Write-Host "`nPython executable:" -ForegroundColor Yellow
+          python -c "import sys; print(sys.executable)"
+          Write-Host "`nPaquetes instalados:" -ForegroundColor Yellow
+          pip list | Select-String -Pattern "pyinstaller|pdftotext|fastapi"
+          
           # Ejecutar PyInstaller con output verbose - capturar sin fallar en stderr
+          Write-Host "`nEjecutando PyInstaller..." -ForegroundColor Cyan
           $ErrorActionPreference = "Continue"
-          pyinstaller --clean --log-level DEBUG backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
+          
+          # Intentar con --onefile explícito
+          pyinstaller --clean --onefile --log-level DEBUG --name backend-api main.py 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
           
           $pyinstallerExitCode = $LASTEXITCODE
           Write-Host "`nPyInstaller exit code: $pyinstallerExitCode" -ForegroundColor $(if ($pyinstallerExitCode -eq 0) { "Green" } else { "Red" })
           
           # Mostrar las últimas líneas del log
-          Write-Host "`nÚltimas 20 líneas del log de PyInstaller:" -ForegroundColor Cyan
-          Get-Content "../pyinstaller-build.log" | Select-Object -Last 20
+          Write-Host "`nÚltimas 30 líneas del log de PyInstaller:" -ForegroundColor Cyan
+          Get-Content "../pyinstaller-build.log" | Select-Object -Last 30
           
           Set-Location ..
           
@@ -158,8 +169,8 @@ jobs:
           Write-Host "`nBuscando ejecutable compilado..." -ForegroundColor Cyan
           $backendExe = $null
           $possibleNames = @(
-              "backend\dist\backend-api\backend-api.exe",
               "backend\dist\backend-api.exe",
+              "backend\dist\backend-api\backend-api.exe",
               "backend\dist\main\main.exe",
               "backend\dist\main.exe"
           )
