@@ -347,10 +347,11 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     log_to_file(&format!("Buscando binario: {}", binary_filename));
     
     // Resolver la ruta completa del binario
+    // Tauri coloca los external binaries directamente en el resource directory
     let backend_path = app_handle
         .path()
         .resolve(
-            PathBuf::from("binaries").join(binary_filename),
+            binary_filename,  // Buscar directamente, no en subdirectorio
             tauri::path::BaseDirectory::Resource
         )
         .map_err(|e| {
