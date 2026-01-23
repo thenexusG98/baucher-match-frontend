@@ -105,7 +105,7 @@ jobs:
               Write-Host "[OK] backend.spec encontrado" -ForegroundColor Green
           } else {
               Write-Host "[ERROR] backend\backend.spec no existe" -ForegroundColor Red
-              Write-Host "Creando backend.spec básico..." -ForegroundColor Yellow
+              Write-Host "Creando backend.spec basico..." -ForegroundColor Yellow
               exit 1
           }
           
@@ -140,8 +140,8 @@ jobs:
           $pyinstallerExitCode = $LASTEXITCODE
           Write-Host "`nPyInstaller exit code: $pyinstallerExitCode" -ForegroundColor $(if ($pyinstallerExitCode -eq 0) { "Green" } else { "Red" })
           
-          # Mostrar las últimas líneas del log
-          Write-Host "`nÚltimas 30 líneas del log de PyInstaller:" -ForegroundColor Cyan
+          # Mostrar las ultimas lineas del log
+          Write-Host "`nUltimas 30 lineas del log de PyInstaller" -ForegroundColor Cyan
           Get-Content "../pyinstaller-build.log" | Select-Object -Last 30
           
           Set-Location ..
@@ -181,7 +181,7 @@ jobs:
                   $backendExe = $path
                   Write-Host "[OK] Encontrado: $path" -ForegroundColor Green
                   $fileInfo = Get-Item $path
-                  Write-Host "Tamaño: $($fileInfo.Length) bytes" -ForegroundColor Yellow
+                  Write-Host "Tamano: $($fileInfo.Length) bytes" -ForegroundColor Yellow
                   break
               }
           }
@@ -257,17 +257,17 @@ jobs:
       - name: Verify Tauri bundle contents
         shell: powershell
         run: |
-          Write-Host "=== VERIFICACIÓN DEL BUNDLE DE TAURI ===" -ForegroundColor Magenta
+          Write-Host "=== VERIFICACION DEL BUNDLE DE TAURI ===" -ForegroundColor Magenta
           
-          # Buscar el directorio de instalación de la app
+          # Buscar el directorio de instalacion de la app
           $bundlePath = "src-tauri\target\release"
           
-          Write-Host "`nContenido de $bundlePath:" -ForegroundColor Cyan
+          Write-Host "`nContenido de $bundlePath" -ForegroundColor Cyan
           Get-ChildItem $bundlePath -Directory | Format-Table Name
           
           # Verificar si hay un directorio con los binarios externos
           if (Test-Path "$bundlePath\binaries") {
-              Write-Host "`n[OK] Directorio binaries encontrado en release:" -ForegroundColor Green
+              Write-Host "`n[OK] Directorio binaries encontrado en release" -ForegroundColor Green
               Get-ChildItem "$bundlePath\binaries" -Recurse | Format-Table Name, Length
           } else {
               Write-Host "`n[ERROR] NO se encontro directorio binaries en release" -ForegroundColor Red
@@ -279,7 +279,7 @@ jobs:
           }
           
           # Listar todo el bundle
-          Write-Host "`nEstructura completa del release:" -ForegroundColor Cyan
+          Write-Host "`nEstructura completa del release" -ForegroundColor Cyan
           Get-ChildItem $bundlePath -Recurse -Depth 2 | Select-Object FullName | Format-Table
 
       - name: Rename artifacts
