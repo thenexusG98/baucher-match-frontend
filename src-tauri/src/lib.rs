@@ -332,17 +332,18 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     
     // En Tauri 2.0, los binarios externos se empaquetan en el directorio de recursos
     // Necesitamos construir manualmente la ruta con el sufijo de plataforma correcto
+    // NOTA: Tauri renombra los binarios externos a solo el nombre base + .exe en Windows
     #[cfg(target_os = "windows")]
-    let binary_filename = "backend-api-x86_64-pc-windows-msvc.exe";
+    let binary_filename = "backend-api.exe";
     
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    let binary_filename = "backend-api-aarch64-apple-darwin";
+    let binary_filename = "backend-api";
     
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    let binary_filename = "backend-api-x86_64-apple-darwin";
+    let binary_filename = "backend-api";
     
     #[cfg(target_os = "linux")]
-    let binary_filename = "backend-api-x86_64-unknown-linux-gnu";
+    let binary_filename = "backend-api";
     
     log_to_file(&format!("Buscando binario: {}", binary_filename));
     
