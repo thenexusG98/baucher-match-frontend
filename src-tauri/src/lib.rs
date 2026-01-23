@@ -301,14 +301,23 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
         return Ok("Backend ya está corriendo".to_string());
     }
     
-    // Tauri automáticamente agrega el sufijo de plataforma al buscar el binario
-    // Por ejemplo: backend-api -> backend-api-x86_64-pc-windows-msvc.exe en Windows
-    let binary_name = "backend-api";
+    // Determinar el nombre del binario según la plataforma
+    #[cfg(target_os = "windows")]
+    let binary_name = "backend-api-x86_64-pc-windows-msvc.exe";
+    
+    #[cfg(target_os = "macos")]
+    let binary_name = if cfg!(target_arch = "aarch64") {
+        "backend-api-aarch64-apple-darwin"
+    } else {
+        "backend-api-x86_64-apple-darwin"
+    };
+    
+    #[cfg(target_os = "linux")]
+    let binary_name = "backend-api-x86_64-unknown-linux-gnu";
     
     log_to_file(&format!("Buscando binario: {}", binary_name));
     
     // Obtener ruta del sidecar usando el API de Tauri
-    // Tauri buscará automáticamente el archivo con el sufijo correcto de la plataforma
     let backend_path = app_handle
         .path()
         .resolve(format!("binaries/{}", binary_name), tauri::path::BaseDirectory::Resource)
