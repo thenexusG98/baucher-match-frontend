@@ -32,10 +32,18 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/backend-api"
+      "binaries/backend-api-aarch64-apple-darwin",
+      "binaries/backend-api-x86_64-apple-darwin",
+      "binaries/backend-api-x86_64-unknown-linux-gnu",
+      "binaries/backend-api-x86_64-pc-windows-msvc"
     ],
     "resources": [
       "libs/*"
-    ]
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
   }
 }

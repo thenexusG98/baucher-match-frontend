@@ -301,10 +301,28 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
         return Ok("Backend ya está corriendo".to_string());
     }
     
+    // Determinar el nombre del binario según la plataforma
+    let binary_name = if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            "backend-api-aarch64-apple-darwin"
+        } else {
+            "backend-api-x86_64-apple-darwin"
+        }
+    } else if cfg!(target_os = "windows") {
+        "backend-api-x86_64-pc-windows-msvc"
+    } else if cfg!(target_os = "linux") {
+        "backend-api-x86_64-unknown-linux-gnu"
+    } else {
+        log_to_file("Sistema operativo no soportado");
+        return Err("Sistema operativo no soportado".to_string());
+    };
+    
+    log_to_file(&format!("Buscando binario: {}", binary_name));
+    
     // Obtener ruta del sidecar usando el API resolver de Tauri
     let backend_path = app_handle
         .path()
-        .resolve("binaries/backend-api", tauri::path::BaseDirectory::Resource)
+        .resolve(format!("binaries/{}", binary_name), tauri::path::BaseDirectory::Resource)
         .map_err(|e| {
             let error_msg = format!("No se pudo obtener ruta del backend: {}", e);
             log_to_file(&error_msg);
@@ -316,7 +334,7 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     // Verificar que el archivo existe
     if !backend_path.exists() {
         let error_msg = format!(
-            "El ejecutable del backend no existe en: {:?}. Asegúrate de ejecutar ./build-backend.sh primero.",
+            "El ejecutable del backend no existe en: {:?}. Asegúrate de ejecutar build-backend.bat (Windows) o ./build-backend.sh (Mac/Linux) primero.",
             backend_path
         );
         log_to_file(&error_msg);
