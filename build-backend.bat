@@ -37,6 +37,13 @@ if exist "dist\backend-api.exe" (
     echo ✓ Backend compilado exitosamente!
     echo ✓ Ejecutable copiado a: src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe
     echo.
+    echo NOTA: Tauri buscara este archivo como: backend-api.exe
+    echo Creando enlace simbolico...
+    
+    REM Crear una copia con el nombre base tambien
+    copy /Y "dist\backend-api.exe" "..\src-tauri\binaries\backend-api.exe"
+    echo ✓ Tambien copiado como: src-tauri\binaries\backend-api.exe
+    echo.
 ) else (
     echo Error: No se pudo generar el ejecutable
     exit /b 1

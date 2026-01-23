@@ -72,13 +72,19 @@ fi
 # Copiar el binario al directorio de Tauri con el nombre correcto
 if [ -f "dist/backend-api.exe" ]; then
     cp "dist/backend-api.exe" "../src-tauri/binaries/$BINARY_NAME"
+    # También copiar con el nombre base para desarrollo
+    cp "dist/backend-api.exe" "../src-tauri/binaries/backend-api.exe"
 else
     cp "dist/backend-api" "../src-tauri/binaries/$BINARY_NAME"
     chmod +x "../src-tauri/binaries/$BINARY_NAME"
+    # También copiar con el nombre base para desarrollo
+    cp "dist/backend-api" "../src-tauri/binaries/backend-api"
+    chmod +x "../src-tauri/binaries/backend-api"
 fi
 
 echo -e "${GREEN}✅ Backend compilado exitosamente${NC}"
 echo -e "${GREEN}📦 Binario guardado en: src-tauri/binaries/$BINARY_NAME${NC}"
+echo -e "${GREEN}📦 También copiado como: src-tauri/binaries/backend-api${NC}"
 
 # Mostrar tamaño del archivo
 FILE_SIZE=$(du -h "../src-tauri/binaries/$BINARY_NAME" | cut -f1)

@@ -100,9 +100,15 @@ jobs:
           Set-Location ..
           
           # Renombrar y mover el ejecutable
+          # Tauri espera el binario sin sufijo, pero el sistema agregará -x86_64-pc-windows-msvc.exe
           if (Test-Path "backend\dist\backend-api.exe") {
-              Move-Item -Path "backend\dist\backend-api.exe" -Destination "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe" -Force
-              Write-Host "✅ Backend compilado exitosamente" -ForegroundColor Green
+              # Copiar con el nombre que Tauri espera en externalBin
+              Copy-Item -Path "backend\dist\backend-api.exe" -Destination "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe" -Force
+              Write-Host "✅ Backend copiado a: backend-api-x86_64-pc-windows-msvc.exe" -ForegroundColor Green
+              
+              # También copiar con el nombre base para desarrollo
+              Copy-Item -Path "backend\dist\backend-api.exe" -Destination "src-tauri\binaries\backend-api.exe" -Force
+              Write-Host "✅ Backend copiado a: backend-api.exe (desarrollo)" -ForegroundColor Green
           } else {
               Write-Host "❌ Error: No se encontró backend\dist\backend-api.exe" -ForegroundColor Red
               Write-Host "Contenido de backend\dist:" -ForegroundColor Yellow
@@ -110,14 +116,20 @@ jobs:
               exit 1
           }
           
-          # Verificar que el binario existe
+          # Verificar que los binarios existen
+          Write-Host "`nVerificando binarios creados:" -ForegroundColor Cyan
           if (Test-Path "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe") {
-              Write-Host "✅ Binario creado correctamente en src-tauri\binaries" -ForegroundColor Green
-              Get-Item "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe"
-          } else {
-              Write-Host "❌ Error: No se encontró el binario en src-tauri\binaries" -ForegroundColor Red
-              exit 1
+              Write-Host "✅ backend-api-x86_64-pc-windows-msvc.exe" -ForegroundColor Green
+              Get-Item "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe" | Format-List Name, Length, LastWriteTime
           }
+          if (Test-Path "src-tauri\binaries\backend-api.exe") {
+              Write-Host "✅ backend-api.exe" -ForegroundColor Green
+              Get-Item "src-tauri\binaries\backend-api.exe" | Format-List Name, Length, LastWriteTime
+          }
+          
+          # Listar todos los archivos en binaries
+          Write-Host "`nContenido completo de src-tauri\binaries:" -ForegroundColor Cyan
+          Get-ChildItem "src-tauri\binaries" -Recurse | Format-Table Name, Length, LastWriteTime
 
       - name: Build Tauri app
         run: npm run tauri build

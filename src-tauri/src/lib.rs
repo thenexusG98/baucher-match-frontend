@@ -301,25 +301,14 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
         return Ok("Backend ya está corriendo".to_string());
     }
     
-    // Determinar el nombre del binario según la plataforma
-    let binary_name = if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
-            "backend-api-aarch64-apple-darwin"
-        } else {
-            "backend-api-x86_64-apple-darwin"
-        }
-    } else if cfg!(target_os = "windows") {
-        "backend-api-x86_64-pc-windows-msvc"
-    } else if cfg!(target_os = "linux") {
-        "backend-api-x86_64-unknown-linux-gnu"
-    } else {
-        log_to_file("Sistema operativo no soportado");
-        return Err("Sistema operativo no soportado".to_string());
-    };
+    // Tauri automáticamente agrega el sufijo de plataforma al buscar el binario
+    // Por ejemplo: backend-api -> backend-api-x86_64-pc-windows-msvc.exe en Windows
+    let binary_name = "backend-api";
     
     log_to_file(&format!("Buscando binario: {}", binary_name));
     
-    // Obtener ruta del sidecar usando el API resolver de Tauri
+    // Obtener ruta del sidecar usando el API de Tauri
+    // Tauri buscará automáticamente el archivo con el sufijo correcto de la plataforma
     let backend_path = app_handle
         .path()
         .resolve(format!("binaries/{}", binary_name), tauri::path::BaseDirectory::Resource)
@@ -329,10 +318,20 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
             error_msg
         })?;
     
-    log_to_file(&format!("🚀 Iniciando backend desde: {:?}", backend_path));
+    log_to_file(&format!("🚀 Ruta resuelta del backend: {:?}", backend_path));
     
     // Verificar que el archivo existe
     if !backend_path.exists() {
+        // Intentar listar los archivos en el directorio para debugging
+        if let Some(parent) = backend_path.parent() {
+            log_to_file(&format!("Listando archivos en: {:?}", parent));
+            if let Ok(entries) = std::fs::read_dir(parent) {
+                for entry in entries.flatten() {
+                    log_to_file(&format!("  - {:?}", entry.file_name()));
+                }
+            }
+        }
+        
         let error_msg = format!(
             "El ejecutable del backend no existe en: {:?}. Asegúrate de ejecutar build-backend.bat (Windows) o ./build-backend.sh (Mac/Linux) primero.",
             backend_path
@@ -340,6 +339,8 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
         log_to_file(&error_msg);
         return Err(error_msg);
     }
+    
+    log_to_file(&format!("✓ Backend encontrado, iniciando proceso..."));
     
     // Iniciar proceso
     let child = Command::new(&backend_path)
