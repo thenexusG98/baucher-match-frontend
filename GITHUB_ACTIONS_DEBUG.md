@@ -4,6 +4,12 @@
 
 El workflow de GitHub Actions no está generando el ejecutable del backend (`backend-api.exe`) correctamente, lo que resulta en un directorio `binaries` vacío cuando la aplicación se instala en Windows.
 
+### Actualización: Error de PowerShell
+
+**Problema encontrado**: PowerShell estaba interpretando el output normal de PyInstaller (que va a stderr) como un error, causando que el workflow fallara prematuramente.
+
+**Solución implementada**: Cambiar `Tee-Object` por `Out-File` con `$ErrorActionPreference = "Continue"` para que PowerShell no trate stderr como error fatal.
+
 ## Cambios Implementados
 
 ### 1. Mejoras en el paso "Build backend"

@@ -122,11 +122,16 @@ jobs:
           # Compilar con PyInstaller usando rutas absolutas
           Set-Location backend
           
-          # Ejecutar PyInstaller con output verbose
-          pyinstaller --clean --log-level DEBUG backend.spec 2>&1 | Tee-Object -FilePath "../pyinstaller-build.log"
+          # Ejecutar PyInstaller con output verbose - capturar sin fallar en stderr
+          $ErrorActionPreference = "Continue"
+          pyinstaller --clean --log-level DEBUG backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
           
           $pyinstallerExitCode = $LASTEXITCODE
           Write-Host "`nPyInstaller exit code: $pyinstallerExitCode" -ForegroundColor $(if ($pyinstallerExitCode -eq 0) { "Green" } else { "Red" })
+          
+          # Mostrar las últimas líneas del log
+          Write-Host "`nÚltimas 20 líneas del log de PyInstaller:" -ForegroundColor Cyan
+          Get-Content "../pyinstaller-build.log" | Select-Object -Last 20
           
           Set-Location ..
           
