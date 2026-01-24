@@ -83,6 +83,17 @@ jobs:
           Write-Host "`n=== Verificando PyInstaller ===" -ForegroundColor Cyan
           python -c "import PyInstaller; print(f'PyInstaller version: {PyInstaller.__version__}')"
           
+          # Verificar módulos críticos
+          Write-Host "`n=== Verificando módulos críticos ===" -ForegroundColor Cyan
+          $modules = @('uvicorn', 'fastapi', 'pydantic', 'starlette', 'pdftotext')
+          foreach ($module in $modules) {
+              try {
+                  python -c "import $module; print(f'[OK] $module instalado')"
+              } catch {
+                  Write-Host "[ERROR] $module NO esta instalado" -ForegroundColor Red
+              }
+          }
+          
           # Crear directorio de binarios
           New-Item -ItemType Directory -Force -Path "src-tauri\binaries"
           
@@ -145,8 +156,18 @@ jobs:
           Write-Host "`nEjecutando PyInstaller con backend.spec..." -ForegroundColor Cyan
           $ErrorActionPreference = "Continue"
           
-          # Usar el archivo .spec que tiene todas las dependencias configuradas
-          pyinstaller --clean --log-level INFO backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
+          # Usar el archivo .spec con flags adicionales para asegurar que incluya todos los módulos
+          pyinstaller --clean --log-level INFO `
+            --collect-all uvicorn `
+            --collect-all fastapi `
+            --collect-all starlette `
+            --collect-all pydantic `
+            --collect-all pydantic_core `
+            --copy-metadata uvicorn `
+            --copy-metadata fastapi `
+            --copy-metadata starlette `
+            --copy-metadata pydantic `
+            backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
           
           $pyinstallerExitCode = $LASTEXITCODE
           Write-Host "`nPyInstaller exit code: $pyinstallerExitCode" -ForegroundColor $(if ($pyinstallerExitCode -eq 0) { "Green" } else { "Red" })
