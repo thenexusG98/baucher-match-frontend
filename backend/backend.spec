@@ -5,44 +5,86 @@ PyInstaller spec file para empaquetar el backend FastAPI
 
 import sys
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
 # Obtener el directorio del backend
 backend_dir = Path.cwd()
 
-# Recolectar todos los módulos, datos y binarios de los paquetes críticos
-datas = []
-binaries = []
-hiddenimports = []
+print("="*60)
+print("CONFIGURANDO PYINSTALLER SPEC")
+print("="*60)
+print(f"Backend dir: {backend_dir}")
+print(f"Python version: {sys.version}")
+print(f"Python executable: {sys.executable}")
 
-# Usar collect_all para incluir TODO de estos paquetes
-for package in ['uvicorn', 'fastapi', 'starlette', 'pydantic', 'pydantic_core']:
-    package_datas, package_binaries, package_hiddenimports = collect_all(package)
-    datas += package_datas
-    binaries += package_binaries
-    hiddenimports += package_hiddenimports
+# Intentar importar collect_all
+try:
+    from PyInstaller.utils.hooks import collect_all, collect_submodules
+    print("✓ PyInstaller hooks importados correctamente")
+    
+    # Recolectar todos los módulos
+    datas = []
+    binaries = []
+    hiddenimports = []
+    
+    print("\nRecolectando paquetes...")
+    for package in ['uvicorn', 'fastapi', 'starlette', 'pydantic', 'pydantic_core', 'anyio', 'h11', 'sniffio']:
+        try:
+            print(f"  Recolectando {package}...")
+            pkg_datas, pkg_binaries, pkg_hiddenimports = collect_all(package)
+            datas += pkg_datas
+            binaries += pkg_binaries
+            hiddenimports += pkg_hiddenimports
+            print(f"    ✓ {package}: {len(pkg_hiddenimports)} hiddenimports, {len(pkg_datas)} datas")
+        except Exception as e:
+            print(f"    ✗ Error con {package}: {e}")
+            # Si falla collect_all, al menos recolectar submódulos
+            try:
+                submods = collect_submodules(package)
+                hiddenimports += submods
+                print(f"    ↻ Usando collect_submodules: {len(submods)} módulos")
+            except:
+                print(f"    ✗ También falló collect_submodules")
+    
+    # Agregar el directorio app
+    datas.append(('app', 'app'))
+    
+    # Hiddenimports adicionales explícitos
+    additional_imports = [
+        'multipart', 'python_multipart', 'email.mime', 'email.mime.multipart',
+        'email.mime.text', 'click', 'fitz', 'pdftotext',
+        # Módulos críticos de uvicorn que a veces PyInstaller no detecta
+        'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
+        'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto',
+        'uvicorn.lifespan', 'uvicorn.lifespan.on', 'uvicorn.server',
+        'uvicorn.config', 'uvicorn.main', 'uvicorn.importer',
+        # Módulos de FastAPI
+        'fastapi.routing', 'fastapi.encoders', 'fastapi.exceptions',
+    ]
+    hiddenimports += additional_imports
+    
+    print(f"\nTotal hiddenimports: {len(hiddenimports)}")
+    print(f"Total datas: {len(datas)}")
+    print(f"Total binaries: {len(binaries)}")
+    
+except ImportError as e:
+    print(f"✗ Error importando PyInstaller hooks: {e}")
+    print("Usando configuración mínima...")
+    datas = [('app', 'app')]
+    binaries = []
+    hiddenimports = [
+        'uvicorn', 'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
+        'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto',
+        'uvicorn.lifespan', 'uvicorn.lifespan.on', 'uvicorn.server',
+        'uvicorn.config', 'uvicorn.main', 'fastapi', 'starlette',
+        'pydantic', 'pydantic_core', 'anyio', 'h11', 'sniffio',
+        'multipart', 'python_multipart', 'click', 'fitz', 'pdftotext',
+    ]
 
-# Agregar el directorio app como data
-datas.append(('app', 'app'))
-
-# Agregar hiddenimports adicionales específicos
-hiddenimports += [
-    'multipart',
-    'python_multipart',
-    'email.mime',
-    'email.mime.multipart',
-    'email.mime.text',
-    'anyio',
-    'anyio._backends',
-    'anyio._backends._asyncio',
-    'sniffio',
-    'h11',
-    'click',
-    'fitz',
-    'pdftotext',
-]
+print("="*60)
 
 # Analizar el archivo principal
 a = Analysis(

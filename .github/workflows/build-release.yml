@@ -43,10 +43,52 @@ jobs:
         shell: powershell
         run: |
           python -m venv .venv
-          & .venv\Scripts\Activate.ps1
-          python -m pip install --upgrade pip
-          pip install -r backend\requirements.txt
-          pip install pyinstaller
+          $pythonVenv = ".venv\Scripts\python.exe"
+          $pipVenv = ".venv\Scripts\pip.exe"
+          
+          Write-Host "=== Instalando dependencias Python ===" -ForegroundColor Cyan
+          & $pythonVenv -m pip install --upgrade pip
+          
+          # Instalar todas las dependencias EXCEPTO pdftotext primero
+          Write-Host "`nInstalando paquetes de requirements.txt (excepto pdftotext)..." -ForegroundColor Yellow
+          Get-Content backend\requirements.txt | Where-Object { $_ -notmatch '^pdftotext' -and $_.Trim() -ne '' } | ForEach-Object {
+              $package = $_.Trim()
+              if ($package -and -not $package.StartsWith('#')) {
+                  Write-Host "Instalando: $package" -ForegroundColor Gray
+                  & $pipVenv install $package
+              }
+          }
+          
+          # Instalar PyInstaller
+          Write-Host "`nInstalando PyInstaller..." -ForegroundColor Yellow
+          & $pipVenv install pyinstaller
+          
+          # Instalar pdftotext desde wheel precompilado (compatible con Windows)
+          Write-Host "`nInstalando pdftotext desde wheel precompilado..." -ForegroundColor Yellow
+          & $pipVenv install pdftotext --only-binary=:all: --no-build-isolation 2>&1 | Out-Null
+          
+          # Si falla, intentar sin pdftotext (usaremos PyMuPDF como fallback)
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "[WARNING] pdftotext wheel no disponible. Continuando sin pdftotext." -ForegroundColor Yellow
+              Write-Host "          El backend usara PyMuPDF como alternativa." -ForegroundColor Yellow
+          } else {
+              Write-Host "[OK] pdftotext instalado correctamente" -ForegroundColor Green
+          }
+          
+          # Verificar módulos críticos
+          Write-Host "`n=== Verificando instalacion ===" -ForegroundColor Cyan
+          $criticalModules = @('uvicorn', 'fastapi', 'pydantic', 'starlette')
+          foreach ($module in $criticalModules) {
+              $result = & $pythonVenv -c "import $module; print('✓ $module')" 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                  Write-Host $result -ForegroundColor Green
+              } else {
+                  Write-Host "[ERROR] Falta modulo critico: $module" -ForegroundColor Red
+                  exit 1
+              }
+          }
+          
+          Write-Host "`n[OK] Entorno Python configurado correctamente" -ForegroundColor Green
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -76,137 +118,41 @@ jobs:
       - name: Build backend
         shell: powershell
         run: |
-          # Usar el path absoluto del Python del venv en lugar de activar
+          # Usar el path absoluto del Python del venv
           $pythonVenv = ".venv\Scripts\python.exe"
           $pipVenv = ".venv\Scripts\pip.exe"
           
-          # Verificar que el venv existe
-          if (-not (Test-Path $pythonVenv)) {
-              Write-Host "[ERROR] El venv no existe en $pythonVenv" -ForegroundColor Red
-              exit 1
-          }
-          
-          Write-Host "Usando Python del venv: $pythonVenv" -ForegroundColor Cyan
+          Write-Host "=== Compilando backend con PyInstaller ===" -ForegroundColor Cyan
+          Write-Host "Python: $pythonVenv" -ForegroundColor Gray
           & $pythonVenv --version
           
-          # Verificar que PyInstaller está instalado
-          Write-Host "`n=== Verificando PyInstaller ===" -ForegroundColor Cyan
-          & $pythonVenv -c "import PyInstaller; print(f'PyInstaller version: {PyInstaller.__version__}')"
+          # Verificar PyInstaller
+          & $pythonVenv -c "import PyInstaller; print(f'PyInstaller {PyInstaller.__version__}')"
           
-          # Verificar módulos críticos
-          Write-Host "`n=== Verificando módulos críticos ===" -ForegroundColor Cyan
-          $modules = @('uvicorn', 'fastapi', 'pydantic', 'starlette', 'pdftotext')
-          $allInstalled = $true
-          foreach ($module in $modules) {
-              try {
-                  & $pythonVenv -c "import $module; print('[OK] $module instalado')"
-              } catch {
-                  Write-Host "[ERROR] $module NO esta instalado" -ForegroundColor Red
-                  $allInstalled = $false
-              }
-          }
-          
-          if (-not $allInstalled) {
-              Write-Host "`n[ERROR] Faltan módulos. Reinstalando requirements..." -ForegroundColor Yellow
-              & $pipVenv install -r backend\requirements.txt
-              Write-Host "Verificando de nuevo..." -ForegroundColor Cyan
-              foreach ($module in $modules) {
-                  & $pythonVenv -c "import $module; print('[OK] $module instalado')"
-              }
-          }
+          # Listar módulos instalados relevantes
+          Write-Host "`nModulos instalados:" -ForegroundColor Yellow
+          & $pipVenv list | Select-String -Pattern "fastapi|uvicorn|pydantic|starlette|pdftotext|pymupdf|pyinstaller"
           
           # Crear directorio de binarios
-          New-Item -ItemType Directory -Force -Path "src-tauri\binaries"
+          New-Item -ItemType Directory -Force -Path "src-tauri\binaries" | Out-Null
           
-          # Obtener ruta actual
-          $currentPath = Get-Location
-          Write-Host "`n=== Directorio actual: $currentPath ===" -ForegroundColor Cyan
-          
-          # Verificar que existe el directorio backend
-          if (Test-Path "backend") {
-              Write-Host "[OK] Directorio backend encontrado" -ForegroundColor Green
-              Write-Host "Contenido de backend:" -ForegroundColor Yellow
-              Get-ChildItem backend | Select-Object Name, Length | Format-Table
-          } else {
-              Write-Host "[ERROR] Directorio backend no existe" -ForegroundColor Red
-              exit 1
-          }
-          
-          # Verificar que existe backend.spec
-          if (Test-Path "backend\backend.spec") {
-              Write-Host "[OK] backend.spec encontrado" -ForegroundColor Green
-          } else {
-              Write-Host "[ERROR] backend\backend.spec no existe" -ForegroundColor Red
-              Write-Host "Creando backend.spec basico..." -ForegroundColor Yellow
-              exit 1
-          }
-          
-          # Verificar que existe main.py
-          if (Test-Path "backend\main.py") {
-              Write-Host "[OK] main.py encontrado" -ForegroundColor Green
-          } else {
-              Write-Host "[ERROR] backend\main.py no existe" -ForegroundColor Red
-              exit 1
-          }
-          
-          Write-Host "`n=== Compilando backend con PyInstaller ===" -ForegroundColor Cyan
-          
-          # Compilar con PyInstaller usando rutas absolutas
+          # Cambiar a directorio backend
           Set-Location backend
           
-          # Mostrar información del entorno usando el Python del venv
-          Write-Host "Python version:" -ForegroundColor Yellow
-          & ..\.venv\Scripts\python.exe --version
-          Write-Host "`nPython executable:" -ForegroundColor Yellow
-          & ..\.venv\Scripts\python.exe -c "import sys; print(sys.executable)"
-          Write-Host "`nPaquetes instalados:" -ForegroundColor Yellow
-          & ..\.venv\Scripts\pip.exe list | Select-String -Pattern "pyinstaller|pdftotext|fastapi|uvicorn"
+          Write-Host "`n=== Ejecutando PyInstaller ===" -ForegroundColor Cyan
           
-          # Verificar contenido del backend.spec
-          Write-Host "`nVerificando backend.spec:" -ForegroundColor Yellow
-          if (Test-Path "backend.spec") {
-              Write-Host "[OK] backend.spec existe" -ForegroundColor Green
-              Write-Host "Primeras 20 lineas del backend.spec:" -ForegroundColor Cyan
-              Get-Content "backend.spec" | Select-Object -First 20
-          } else {
-              Write-Host "[ERROR] backend.spec no encontrado" -ForegroundColor Red
-              exit 1
-          }
-          
-          # Ejecutar PyInstaller con output verbose - capturar sin fallar en stderr
-          Write-Host "`nEjecutando PyInstaller con backend.spec..." -ForegroundColor Cyan
-          $ErrorActionPreference = "Continue"
-          
-          # Usar PyInstaller del venv directamente
-          & ..\.venv\Scripts\pyinstaller.exe --clean --log-level INFO backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
+          # Compilar usando PyInstaller del venv
+          & ..\.venv\Scripts\pyinstaller.exe --clean --log-level INFO backend.spec 2>&1 | Tee-Object -FilePath "../pyinstaller-build.log"
           
           $pyinstallerExitCode = $LASTEXITCODE
           Write-Host "`nPyInstaller exit code: $pyinstallerExitCode" -ForegroundColor $(if ($pyinstallerExitCode -eq 0) { "Green" } else { "Red" })
           
-          # Mostrar las ultimas lineas del log
-          Write-Host "`nUltimas 30 lineas del log de PyInstaller" -ForegroundColor Cyan
-          Get-Content "../pyinstaller-build.log" | Select-Object -Last 30
+          if ($pyinstallerExitCode -ne 0) {
+              Write-Host "[ERROR] PyInstaller fallo" -ForegroundColor Red
+              exit 1
+          }
           
           Set-Location ..
-          
-          # Verificar que se creó el directorio dist
-          if (Test-Path "backend\dist") {
-              Write-Host "`n[OK] Directorio backend\dist creado" -ForegroundColor Green
-              Write-Host "Contenido de backend\dist:" -ForegroundColor Yellow
-              Get-ChildItem "backend\dist" -Recurse | Select-Object FullName, Length | Format-Table
-          } else {
-              Write-Host "`n[ERROR] No se creo backend\dist" -ForegroundColor Red
-              Write-Host "Log de PyInstaller:" -ForegroundColor Yellow
-              if (Test-Path "pyinstaller-build.log") {
-                  Get-Content "pyinstaller-build.log" | Select-Object -Last 50
-              }
-              exit 1
-          }
-          
-          if ($pyinstallerExitCode -ne 0) {
-              Write-Host "[ERROR] PyInstaller fallo con codigo de salida: $pyinstallerExitCode" -ForegroundColor Red
-              exit 1
-          }
           
           # Buscar el ejecutable generado
           Write-Host "`nBuscando ejecutable compilado..." -ForegroundColor Cyan
