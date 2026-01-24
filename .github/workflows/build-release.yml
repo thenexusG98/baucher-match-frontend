@@ -128,10 +128,21 @@ jobs:
           Write-Host "`nPython executable:" -ForegroundColor Yellow
           python -c "import sys; print(sys.executable)"
           Write-Host "`nPaquetes instalados:" -ForegroundColor Yellow
-          pip list | Select-String -Pattern "pyinstaller|pdftotext|fastapi"
+          pip list | Select-String -Pattern "pyinstaller|pdftotext|fastapi|uvicorn"
+          
+          # Verificar contenido del backend.spec
+          Write-Host "`nVerificando backend.spec:" -ForegroundColor Yellow
+          if (Test-Path "backend.spec") {
+              Write-Host "[OK] backend.spec existe" -ForegroundColor Green
+              Write-Host "Primeras 20 lineas del backend.spec:" -ForegroundColor Cyan
+              Get-Content "backend.spec" | Select-Object -First 20
+          } else {
+              Write-Host "[ERROR] backend.spec no encontrado" -ForegroundColor Red
+              exit 1
+          }
           
           # Ejecutar PyInstaller con output verbose - capturar sin fallar en stderr
-          Write-Host "`nEjecutando PyInstaller..." -ForegroundColor Cyan
+          Write-Host "`nEjecutando PyInstaller con backend.spec..." -ForegroundColor Cyan
           $ErrorActionPreference = "Continue"
           
           # Usar el archivo .spec que tiene todas las dependencias configuradas
