@@ -35,7 +35,8 @@
       "binaries/backend-api"
     ],
     "resources": [
-      "libs/*"
+      "libs/*",
+      "binaries/*.dll"
     ],
     "windows": {
       "certificateThumbprint": null,

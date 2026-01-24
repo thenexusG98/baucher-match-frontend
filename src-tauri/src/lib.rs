@@ -404,6 +404,10 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     
     log_to_file(&format!("✓ Backend encontrado, iniciando proceso..."));
     
+    // Obtener el directorio donde está el ejecutable del backend
+    let backend_dir = backend_path.parent().unwrap_or(&backend_path);
+    log_to_file(&format!("📁 Directorio del backend: {:?}", backend_dir));
+    
     // Obtener el directorio de libs para las DLLs de Poppler
     let libs_dir = if let Ok(resource_dir) = app_handle.path().resource_dir() {
         resource_dir.join("libs")
@@ -413,31 +417,50 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     
     log_to_file(&format!("📁 Directorio de libs: {:?}", libs_dir));
     
-    // En Windows, agregar el directorio de libs al PATH para que encuentre las DLLs
+    // En Windows, agregar AMBOS directorios al PATH para que encuentre las DLLs
     #[cfg(target_os = "windows")]
-    let path_var = if libs_dir.exists() {
+    let path_var = {
         use std::env;
-        let mut paths = vec![libs_dir.to_string_lossy().to_string()];
+        let mut paths = Vec::new();
+        
+        // Primero el directorio del backend (donde están las DLLs copiadas)
+        paths.push(backend_dir.to_string_lossy().to_string());
+        log_to_file(&format!("✓ Agregando al PATH: {:?}", backend_dir));
+        
+        // Luego el directorio libs (respaldo)
+        if libs_dir.exists() {
+            paths.push(libs_dir.to_string_lossy().to_string());
+            log_to_file(&format!("✓ Agregando al PATH: {:?}", libs_dir));
+        } else {
+            log_to_file(&format!("⚠️ Directorio de libs no existe: {:?}", libs_dir));
+        }
+        
+        // Agregar el PATH existente
         if let Ok(existing_path) = env::var("PATH") {
             paths.push(existing_path);
         }
+        
         let new_path = paths.join(";");
-        log_to_file(&format!("PATH actualizado con libs: {}", new_path));
+        log_to_file(&format!("PATH completo: {}", &new_path[..new_path.len().min(200)])); // Primeros 200 chars
         Some(("PATH", new_path))
-    } else {
-        log_to_file(&format!("⚠️ Directorio de libs no existe: {:?}", libs_dir));
-        None
     };
     
-    // Iniciar proceso
+    #[cfg(not(target_os = "windows"))]
+    let path_var: Option<(&str, String)> = None;
+    
+    // Iniciar proceso con captura de stdout/stderr
     let mut cmd = Command::new(&backend_path);
+    
+    // Capturar salida para logging
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
     
     #[cfg(target_os = "windows")]
     if let Some((key, value)) = path_var {
         cmd.env(key, value);
     }
     
-    let child = cmd.spawn()
+    let mut child = cmd.spawn()
         .map_err(|e| {
             let error_msg = format!("Error al iniciar backend: {}. Ruta: {:?}", e, backend_path);
             log_to_file(&error_msg);
@@ -477,9 +500,38 @@ fn start_backend(app_handle: tauri::AppHandle, state: State<BackendProcess>) -> 
     if let Some(ref mut child) = *child_lock {
         match child.try_wait() {
             Ok(Some(status)) => {
+                use std::io::Read;
+                
                 let error_msg = format!("⚠️ El backend terminó después de 5 segundos con código: {:?}", status);
                 log_to_file(&error_msg);
                 log_to_file("💡 Posible causa: Error al iniciar uvicorn o al cargar módulos de Python");
+                
+                // Intentar leer stderr para obtener el error específico
+                if let Some(ref mut stderr) = child.stderr {
+                    let mut error_output = String::new();
+                    if let Ok(_) = stderr.read_to_string(&mut error_output) {
+                        if !error_output.is_empty() {
+                            log_to_file("📋 Error del backend (stderr):");
+                            for line in error_output.lines().take(20) {  // Primeras 20 líneas
+                                log_to_file(&format!("  {}", line));
+                            }
+                        }
+                    }
+                }
+                
+                // Intentar leer stdout también
+                if let Some(ref mut stdout) = child.stdout {
+                    let mut std_output = String::new();
+                    if let Ok(_) = stdout.read_to_string(&mut std_output) {
+                        if !std_output.is_empty() {
+                            log_to_file("📋 Salida del backend (stdout):");
+                            for line in std_output.lines().take(20) {  // Primeras 20 líneas
+                                log_to_file(&format!("  {}", line));
+                            }
+                        }
+                    }
+                }
+                
                 *child_lock = None;
                 return Err(format!("El backend falló después de iniciar. Código de salida: {:?}. Revisa los logs del backend en AppData\\Roaming\\BaucherMatch\\logs", status));
             }

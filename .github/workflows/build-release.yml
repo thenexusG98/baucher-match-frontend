@@ -209,6 +209,18 @@ jobs:
           Copy-Item -Path $backendExe -Destination "src-tauri\binaries\backend-api.exe" -Force
           Write-Host "[OK] Backend copiado a: backend-api.exe" -ForegroundColor Green
           
+          # IMPORTANTE: Copiar DLLs de Poppler junto al ejecutable del backend
+          # Esto es necesario porque pdftotext necesita estas DLLs en el mismo directorio
+          Write-Host "`nCopiando DLLs de Poppler junto al ejecutable del backend..." -ForegroundColor Cyan
+          if (Test-Path "src-tauri\libs\*.dll") {
+              Copy-Item -Path "src-tauri\libs\*.dll" -Destination "src-tauri\binaries\" -Force
+              Write-Host "[OK] DLLs copiadas al directorio del backend" -ForegroundColor Green
+              Write-Host "DLLs copiadas:" -ForegroundColor Yellow
+              Get-ChildItem "src-tauri\binaries\*.dll" | Select-Object Name | Format-Table
+          } else {
+              Write-Host "[WARNING] No se encontraron DLLs en src-tauri\libs\" -ForegroundColor Yellow
+          }
+          
           # Verificar que los binarios existen
           Write-Host "`nVerificando binarios creados:" -ForegroundColor Cyan
           if (Test-Path "src-tauri\binaries\backend-api-x86_64-pc-windows-msvc.exe") {
