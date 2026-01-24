@@ -63,11 +63,13 @@ jobs:
           Write-Host "`nInstalando PyInstaller..." -ForegroundColor Yellow
           & $pipVenv install pyinstaller
           
-          # Instalar pdftotext desde wheel precompilado (compatible con Windows)
-          Write-Host "`nInstalando pdftotext desde wheel precompilado..." -ForegroundColor Yellow
-          & $pipVenv install pdftotext --only-binary=:all: --no-build-isolation 2>&1 | Out-Null
+          # Intentar instalar pdftotext desde wheel precompilado (compatible con Windows)
+          Write-Host "`nIntentando instalar pdftotext desde wheel precompilado..." -ForegroundColor Yellow
+          $ErrorActionPreference = "SilentlyContinue"
+          & $pipVenv install pdftotext --only-binary=:all: 2>&1 | Out-Null
+          $ErrorActionPreference = "Continue"
           
-          # Si falla, intentar sin pdftotext (usaremos PyMuPDF como fallback)
+          # Si falla, continuar sin pdftotext (usaremos PyMuPDF como fallback)
           if ($LASTEXITCODE -ne 0) {
               Write-Host "[WARNING] pdftotext wheel no disponible. Continuando sin pdftotext." -ForegroundColor Yellow
               Write-Host "          El backend usara PyMuPDF como alternativa." -ForegroundColor Yellow
