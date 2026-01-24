@@ -76,24 +76,42 @@ jobs:
       - name: Build backend
         shell: powershell
         run: |
-          # Activar entorno virtual (CRITICO: cada step necesita reactivar el venv)
-          & .venv\Scripts\Activate.ps1
+          # Usar el path absoluto del Python del venv en lugar de activar
+          $pythonVenv = ".venv\Scripts\python.exe"
+          $pipVenv = ".venv\Scripts\pip.exe"
           
-          # Verificar que el venv esta activo
-          Write-Host "Python path: $(python -c 'import sys; print(sys.executable)')" -ForegroundColor Cyan
+          # Verificar que el venv existe
+          if (-not (Test-Path $pythonVenv)) {
+              Write-Host "[ERROR] El venv no existe en $pythonVenv" -ForegroundColor Red
+              exit 1
+          }
+          
+          Write-Host "Usando Python del venv: $pythonVenv" -ForegroundColor Cyan
+          & $pythonVenv --version
           
           # Verificar que PyInstaller está instalado
           Write-Host "`n=== Verificando PyInstaller ===" -ForegroundColor Cyan
-          python -c "import PyInstaller; print(f'PyInstaller version: {PyInstaller.__version__}')"
+          & $pythonVenv -c "import PyInstaller; print(f'PyInstaller version: {PyInstaller.__version__}')"
           
           # Verificar módulos críticos
           Write-Host "`n=== Verificando módulos críticos ===" -ForegroundColor Cyan
           $modules = @('uvicorn', 'fastapi', 'pydantic', 'starlette', 'pdftotext')
+          $allInstalled = $true
           foreach ($module in $modules) {
               try {
-                  python -c "import $module; print(f'[OK] $module instalado')"
+                  & $pythonVenv -c "import $module; print('[OK] $module instalado')"
               } catch {
                   Write-Host "[ERROR] $module NO esta instalado" -ForegroundColor Red
+                  $allInstalled = $false
+              }
+          }
+          
+          if (-not $allInstalled) {
+              Write-Host "`n[ERROR] Faltan módulos. Reinstalando requirements..." -ForegroundColor Yellow
+              & $pipVenv install -r backend\requirements.txt
+              Write-Host "Verificando de nuevo..." -ForegroundColor Cyan
+              foreach ($module in $modules) {
+                  & $pythonVenv -c "import $module; print('[OK] $module instalado')"
               }
           }
           
@@ -136,13 +154,13 @@ jobs:
           # Compilar con PyInstaller usando rutas absolutas
           Set-Location backend
           
-          # Mostrar información del entorno
+          # Mostrar información del entorno usando el Python del venv
           Write-Host "Python version:" -ForegroundColor Yellow
-          python --version
+          & ..\.venv\Scripts\python.exe --version
           Write-Host "`nPython executable:" -ForegroundColor Yellow
-          python -c "import sys; print(sys.executable)"
+          & ..\.venv\Scripts\python.exe -c "import sys; print(sys.executable)"
           Write-Host "`nPaquetes instalados:" -ForegroundColor Yellow
-          pip list | Select-String -Pattern "pyinstaller|pdftotext|fastapi|uvicorn"
+          & ..\.venv\Scripts\pip.exe list | Select-String -Pattern "pyinstaller|pdftotext|fastapi|uvicorn"
           
           # Verificar contenido del backend.spec
           Write-Host "`nVerificando backend.spec:" -ForegroundColor Yellow
@@ -159,8 +177,8 @@ jobs:
           Write-Host "`nEjecutando PyInstaller con backend.spec..." -ForegroundColor Cyan
           $ErrorActionPreference = "Continue"
           
-          # Usar el archivo .spec (no podemos usar --collect-all con .spec)
-          pyinstaller --clean --log-level INFO backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
+          # Usar PyInstaller del venv directamente
+          & ..\.venv\Scripts\pyinstaller.exe --clean --log-level INFO backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
           
           $pyinstallerExitCode = $LASTEXITCODE
           Write-Host "`nPyInstaller exit code: $pyinstallerExitCode" -ForegroundColor $(if ($pyinstallerExitCode -eq 0) { "Green" } else { "Red" })
