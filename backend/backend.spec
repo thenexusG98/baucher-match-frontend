@@ -5,78 +5,52 @@ PyInstaller spec file para empaquetar el backend FastAPI
 
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
 # Obtener el directorio del backend
 backend_dir = Path.cwd()
 
+# Recolectar todos los módulos, datos y binarios de los paquetes críticos
+datas = []
+binaries = []
+hiddenimports = []
+
+# Usar collect_all para incluir TODO de estos paquetes
+for package in ['uvicorn', 'fastapi', 'starlette', 'pydantic', 'pydantic_core']:
+    package_datas, package_binaries, package_hiddenimports = collect_all(package)
+    datas += package_datas
+    binaries += package_binaries
+    hiddenimports += package_hiddenimports
+
+# Agregar el directorio app como data
+datas.append(('app', 'app'))
+
+# Agregar hiddenimports adicionales específicos
+hiddenimports += [
+    'multipart',
+    'python_multipart',
+    'email.mime',
+    'email.mime.multipart',
+    'email.mime.text',
+    'anyio',
+    'anyio._backends',
+    'anyio._backends._asyncio',
+    'sniffio',
+    'h11',
+    'click',
+    'fitz',
+    'pdftotext',
+]
+
 # Analizar el archivo principal
 a = Analysis(
     ['main.py'],
     pathex=[str(backend_dir)],
-    binaries=[],
-    datas=[
-        # Incluir todo el directorio app
-        ('app', 'app'),
-    ],
-        # Incluir todo el directorio app
-        ('app', 'app'),
-    ],
-    hiddenimports=[
-        # Uvicorn y sus dependencias
-        'uvicorn',
-        'uvicorn.logging',
-        'uvicorn.loops',
-        'uvicorn.loops.auto',
-        'uvicorn.protocols',
-        'uvicorn.protocols.http',
-        'uvicorn.protocols.http.auto',
-        'uvicorn.protocols.websockets',
-        'uvicorn.protocols.websockets.auto',
-        'uvicorn.lifespan',
-        'uvicorn.lifespan.on',
-        'uvicorn.server',
-        'uvicorn.config',
-        'uvicorn.main',
-        # FastAPI y dependencias
-        'fastapi',
-        'fastapi.routing',
-        'fastapi.encoders',
-        'fastapi.exceptions',
-        'fastapi.dependencies',
-        'fastapi.security',
-        # Pydantic
-        'pydantic',
-        'pydantic.fields',
-        'pydantic.main',
-        'pydantic.types',
-        'pydantic_core',
-        # Starlette
-        'starlette',
-        'starlette.applications',
-        'starlette.routing',
-        'starlette.middleware',
-        'starlette.middleware.cors',
-        'starlette.responses',
-        'starlette.requests',
-        'starlette.exceptions',
-        # Otros módulos necesarios
-        'multipart',
-        'python_multipart',
-        'email.mime',
-        'email.mime.multipart',
-        'email.mime.text',
-        'anyio',
-        'anyio._backends',
-        'anyio._backends._asyncio',
-        'sniffio',
-        'h11',
-        'click',
-        # PyMuPDF y pdftotext
-        'fitz',
-        'pdftotext',
-    ],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -76,8 +76,11 @@ jobs:
       - name: Build backend
         shell: powershell
         run: |
-          # Activar entorno virtual
+          # Activar entorno virtual (CRITICO: cada step necesita reactivar el venv)
           & .venv\Scripts\Activate.ps1
+          
+          # Verificar que el venv esta activo
+          Write-Host "Python path: $(python -c 'import sys; print(sys.executable)')" -ForegroundColor Cyan
           
           # Verificar que PyInstaller está instalado
           Write-Host "`n=== Verificando PyInstaller ===" -ForegroundColor Cyan
@@ -156,18 +159,8 @@ jobs:
           Write-Host "`nEjecutando PyInstaller con backend.spec..." -ForegroundColor Cyan
           $ErrorActionPreference = "Continue"
           
-          # Usar el archivo .spec con flags adicionales para asegurar que incluya todos los módulos
-          pyinstaller --clean --log-level INFO `
-            --collect-all uvicorn `
-            --collect-all fastapi `
-            --collect-all starlette `
-            --collect-all pydantic `
-            --collect-all pydantic_core `
-            --copy-metadata uvicorn `
-            --copy-metadata fastapi `
-            --copy-metadata starlette `
-            --copy-metadata pydantic `
-            backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
+          # Usar el archivo .spec (no podemos usar --collect-all con .spec)
+          pyinstaller --clean --log-level INFO backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
           
           $pyinstallerExitCode = $LASTEXITCODE
           Write-Host "`nPyInstaller exit code: $pyinstallerExitCode" -ForegroundColor $(if ($pyinstallerExitCode -eq 0) { "Green" } else { "Red" })
