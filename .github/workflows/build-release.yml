@@ -79,7 +79,7 @@ jobs:
           Write-Host "`n=== Verificando instalacion ===" -ForegroundColor Cyan
           $criticalModules = @('uvicorn', 'fastapi', 'pydantic', 'starlette')
           foreach ($module in $criticalModules) {
-              $result = & $pythonVenv -c "import $module; print('✓ $module')" 2>&1
+              $result = & $pythonVenv -c "import $module; print('[OK] $module')" 2>&1
               if ($LASTEXITCODE -eq 0) {
                   Write-Host $result -ForegroundColor Green
               } else {
