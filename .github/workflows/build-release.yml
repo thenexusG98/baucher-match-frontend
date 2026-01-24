@@ -134,8 +134,8 @@ jobs:
           Write-Host "`nEjecutando PyInstaller..." -ForegroundColor Cyan
           $ErrorActionPreference = "Continue"
           
-          # Intentar con --onefile explícito
-          pyinstaller --clean --onefile --log-level DEBUG --name backend-api main.py 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
+          # Usar el archivo .spec que tiene todas las dependencias configuradas
+          pyinstaller --clean --log-level INFO backend.spec 2>&1 | Out-File -FilePath "../pyinstaller-build.log" -Encoding UTF8
           
           $pyinstallerExitCode = $LASTEXITCODE
           Write-Host "`nPyInstaller exit code: $pyinstallerExitCode" -ForegroundColor $(if ($pyinstallerExitCode -eq 0) { "Green" } else { "Red" })
