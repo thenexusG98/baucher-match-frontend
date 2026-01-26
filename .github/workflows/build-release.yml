@@ -59,71 +59,83 @@ jobs:
       - name: Setup Python virtual environment
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+          
           python -m venv .venv
           $pythonVenv = ".venv\Scripts\python.exe"
           $pipVenv = ".venv\Scripts\pip.exe"
           
           Write-Host "=== Instalando dependencias Python ===" -ForegroundColor Cyan
           & $pythonVenv -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { 
+              Write-Host "[ERROR] Fallo actualizar pip" -ForegroundColor Red
+              exit 1 
+          }
           
           # Instalar requirements.txt sin pdftotext primero
           Write-Host "`nInstalando dependencias (excepto pdftotext)..." -ForegroundColor Yellow
-          Get-Content backend\requirements.txt | Where-Object { 
+          $packagesToInstall = Get-Content backend\requirements.txt | Where-Object { 
               $_ -notmatch '^pdftotext' -and $_.Trim() -ne '' -and -not $_.StartsWith('#') 
-          } | ForEach-Object {
-              $package = $_.Trim()
-              Write-Host "  - $package" -ForegroundColor Gray
-              & $pipVenv install $package --quiet
           }
           
-          # Intentar instalar pdftotext (opcional)
+          foreach ($package in $packagesToInstall) {
+              $package = $package.Trim()
+              Write-Host "  - $package" -ForegroundColor Gray
+              & $pipVenv install $package --quiet 2>&1 | Out-Null
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Host "[ERROR] Fallo instalar $package" -ForegroundColor Red
+                  exit 1
+              }
+          }
+          
+          # Intentar instalar pdftotext (opcional - no falla si no funciona)
           Write-Host "`nIntentando instalar pdftotext..." -ForegroundColor Yellow
-          $ErrorActionPreference = "SilentlyContinue"
           & $pipVenv install pdftotext 2>&1 | Out-Null
           if ($LASTEXITCODE -eq 0) {
               Write-Host "[OK] pdftotext instalado" -ForegroundColor Green
           } else {
               Write-Host "[WARNING] pdftotext no disponible - se usara PyMuPDF" -ForegroundColor Yellow
           }
-          $ErrorActionPreference = "Continue"
           
           # Instalar PyInstaller
           Write-Host "`nInstalando PyInstaller..." -ForegroundColor Yellow
           & $pipVenv install pyinstaller
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "[ERROR] Fallo instalar PyInstaller" -ForegroundColor Red
+              exit 1
+          }
           
           # Verificar módulos críticos
           Write-Host "`n=== Verificando instalacion ===" -ForegroundColor Cyan
           $criticalModules = @('uvicorn', 'fastapi', 'pydantic', 'starlette')
           $allOk = $true
+          
           foreach ($module in $criticalModules) {
               $result = & $pythonVenv -c "import $module; print('[OK] $module')" 2>&1
               if ($LASTEXITCODE -eq 0) {
                   Write-Host $result -ForegroundColor Green
               } else {
                   Write-Host "[ERROR] Falta modulo critico: $module" -ForegroundColor Red
-                  Write-Host "Salida: $result" -ForegroundColor Yellow
                   $allOk = $false
               }
           }
           
-          # Verificar pdftotext (opcional - continuar si falta)
-          $ErrorActionPreference = "SilentlyContinue"
+          # Verificar pdftotext (opcional - no afecta $allOk)
           $pdftotextResult = & $pythonVenv -c "import pdftotext; print('[OK] pdftotext')" 2>&1
-          $pdftotextExitCode = $LASTEXITCODE
-          $ErrorActionPreference = "Continue"
-          
-          if ($pdftotextExitCode -eq 0) {
+          if ($LASTEXITCODE -eq 0) {
               Write-Host $pdftotextResult -ForegroundColor Green
           } else {
               Write-Host "[WARNING] pdftotext no disponible - el backend usara PyMuPDF" -ForegroundColor Yellow
           }
           
+          # Solo fallar si faltan módulos críticos
           if (-not $allOk) {
               Write-Host "`n[ERROR] Faltan modulos criticos" -ForegroundColor Red
               exit 1
           }
           
           Write-Host "`n[OK] Entorno Python configurado correctamente" -ForegroundColor Green
+          exit 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
