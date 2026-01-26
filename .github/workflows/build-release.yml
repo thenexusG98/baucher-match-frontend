@@ -42,6 +42,8 @@ jobs:
       - name: Download and setup Poppler for Windows
         shell: powershell
         run: |
+          $ErrorActionPreference = "Continue"
+          
           # Descargar Poppler precompilado para Windows
           Write-Host "=== Descargando Poppler ===" -ForegroundColor Cyan
           $url = "https://github.com/oschwartz10612/poppler-windows/releases/download/v24.08.0-0/Release-24.08.0-0.zip"
@@ -162,6 +164,8 @@ jobs:
       - name: Build backend
         shell: powershell
         run: |
+          $ErrorActionPreference = "Continue"
+          
           # Usar el path absoluto del Python del venv
           $pythonVenv = ".venv\Scripts\python.exe"
           $pipVenv = ".venv\Scripts\pip.exe"
@@ -272,6 +276,8 @@ jobs:
       - name: Verify binaries before Tauri build
         shell: powershell
         run: |
+          $ErrorActionPreference = "Continue"
+          
           Write-Host "=== VERIFICACION FINAL ANTES DEL BUILD DE TAURI ===" -ForegroundColor Magenta
           Write-Host "`nContenido de src-tauri\binaries" -ForegroundColor Cyan
           if (Test-Path "src-tauri\binaries") {
@@ -313,6 +319,8 @@ jobs:
       - name: Verify Tauri bundle contents
         shell: powershell
         run: |
+          $ErrorActionPreference = "Continue"
+          
           Write-Host "=== VERIFICACION DEL BUNDLE DE TAURI ===" -ForegroundColor Magenta
           
           # Buscar el directorio de instalacion de la app
@@ -349,6 +357,8 @@ jobs:
       - name: Rename artifacts
         shell: powershell
         run: |
+          $ErrorActionPreference = "Continue"
+          
           cd src-tauri\target\release\bundle\msi
           Get-ChildItem *.msi | Rename-Item -NewName { "baucher-match-windows-$($env:GITHUB_SHA.Substring(0,7)).msi" }
 
