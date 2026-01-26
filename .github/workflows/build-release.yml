@@ -39,6 +39,23 @@ jobs:
       - name: Install Node dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Download and setup Poppler for Windows
+        shell: powershell
+        run: |
+          # Descargar Poppler precompilado para Windows
+          Write-Host "=== Descargando Poppler ===" -ForegroundColor Cyan
+          $url = "https://github.com/oschwartz10612/poppler-windows/releases/download/v24.08.0-0/Release-24.08.0-0.zip"
+          Invoke-WebRequest -Uri $url -OutFile poppler.zip
+          Expand-Archive -Path poppler.zip -DestinationPath poppler
+          
+          # Crear directorio de librerías para Tauri
+          New-Item -ItemType Directory -Force -Path src-tauri\libs | Out-Null
+          
+          # Copiar todas las DLLs necesarias
+          Copy-Item -Path "poppler\poppler-24.08.0\Library\bin\*.dll" -Destination "src-tauri\libs\" -Force
+          
+          Write-Host "`n[OK] Poppler descargado y DLLs copiadas" -ForegroundColor Green
+
       - name: Setup Python virtual environment
         shell: powershell
         run: |
@@ -49,49 +66,12 @@ jobs:
           Write-Host "=== Instalando dependencias Python ===" -ForegroundColor Cyan
           & $pythonVenv -m pip install --upgrade pip
           
-          # CRITICO: Buscar dinamicamente donde estan los headers de Poppler
-          Write-Host "`nConfigurando variables para compilar pdftotext..." -ForegroundColor Yellow
-          $popplerInclude = Get-ChildItem -Path poppler -Filter "poppler-document.h" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          
-          if ($popplerInclude) {
-              # Los headers están en poppler/cpp/, necesitamos el directorio padre (include/)
-              $includeDir = $popplerInclude.Directory.Parent.Parent.FullName
-              $libraryDir = Join-Path (Split-Path $includeDir -Parent) "lib"
-              $binDir = Join-Path (Split-Path $includeDir -Parent) "bin"
-              
-              Write-Host "Include dir: $includeDir" -ForegroundColor Gray
-              Write-Host "Library dir: $libraryDir" -ForegroundColor Gray
-              Write-Host "Bin dir: $binDir" -ForegroundColor Gray
-              
-              # Configurar variables de entorno para la compilacion
-              $env:INCLUDE = "$includeDir;$env:INCLUDE"
-              $env:LIB = "$libraryDir;$env:LIB"
-              $env:PATH = "$binDir;$env:PATH"
-              
-              Write-Host "[OK] Variables de entorno configuradas para pdftotext" -ForegroundColor Green
-          } else {
-              Write-Host "[ERROR] No se encontraron headers de Poppler" -ForegroundColor Red
-              Write-Host "pdftotext no se podra compilar" -ForegroundColor Yellow
-          }
-          
-          # Instalar requirements.txt completo
+          # Instalar requirements.txt completo (pdftotext fallará, pero continuará con PyMuPDF)
           Write-Host "`nInstalando requirements.txt..." -ForegroundColor Yellow
-          & $pipVenv install -r backend\requirements.txt
-          
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "[ERROR] Fallo la instalacion de requirements.txt" -ForegroundColor Red
-              Write-Host "`nIntentando instalar sin pdftotext..." -ForegroundColor Yellow
-              
-              # Instalar todo excepto pdftotext
-              Get-Content backend\requirements.txt | Where-Object { $_ -notmatch '^pdftotext' -and $_.Trim() -ne '' } | ForEach-Object {
-                  & $pipVenv install $_.Trim()
-              }
-              
-              Write-Host "[WARNING] Continuando SIN pdftotext - usar PyMuPDF como alternativa" -ForegroundColor Yellow
-          }
+          & $pipVenv install -r backend\requirements.txt 2>&1 | Out-Null
           
           # Instalar PyInstaller
-          Write-Host "`nInstalando PyInstaller..." -ForegroundColor Yellow
+          Write-Host "Instalando PyInstaller..." -ForegroundColor Yellow
           & $pipVenv install pyinstaller
           
           # Verificar módulos críticos
@@ -135,39 +115,6 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-
-      - name: Download and setup Poppler for Windows
-        shell: powershell
-        run: |
-          # Descargar Poppler precompilado para Windows
-          Write-Host "=== Descargando Poppler ===" -ForegroundColor Cyan
-          $url = "https://github.com/oschwartz10612/poppler-windows/releases/download/v24.08.0-0/Release-24.08.0-0.zip"
-          Invoke-WebRequest -Uri $url -OutFile poppler.zip
-          Expand-Archive -Path poppler.zip -DestinationPath poppler
-          
-          # Verificar estructura de Poppler
-          Write-Host "`nEstructura de Poppler descargado:" -ForegroundColor Yellow
-          Get-ChildItem poppler -Recurse -Depth 2 | Select-Object FullName
-          
-          # Buscar donde están los headers
-          Write-Host "`nBuscando headers de Poppler:" -ForegroundColor Yellow
-          $headerPath = Get-ChildItem -Path poppler -Filter "poppler-document.h" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($headerPath) {
-              Write-Host "[OK] Headers encontrados en: $($headerPath.DirectoryName)" -ForegroundColor Green
-          } else {
-              Write-Host "[ERROR] Headers de Poppler no encontrados" -ForegroundColor Red
-          }
-          
-          # Crear directorio de librerías para Tauri
-          New-Item -ItemType Directory -Force -Path src-tauri\libs | Out-Null
-          
-          # Copiar todas las DLLs necesarias
-          Copy-Item -Path "poppler\poppler-24.08.0\Library\bin\*.dll" -Destination "src-tauri\libs\" -Force
-          
-          # Verificar que las DLLs se copiaron
-          Write-Host "`nDLLs copiadas a src-tauri\libs:" -ForegroundColor Cyan
-          Get-ChildItem src-tauri\libs\ | Measure-Object | Select-Object -ExpandProperty Count
-          Write-Host "DLLs copiadas" -ForegroundColor Green
 
       - name: Build backend
         shell: powershell
