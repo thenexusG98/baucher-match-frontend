@@ -75,12 +75,32 @@ if __name__ == "__main__":
         logger.info(f"Python version: {sys.version}")
         logger.info(f"Working directory: {os.getcwd()}")
         
+        # Verificar que la app FastAPI se importo correctamente
+        logger.info(f"[CHECK] App FastAPI cargada: {type(app)}")
+        logger.info(f"[CHECK] Uvicorn version: {uvicorn.__version__}")
+        
+        # Verificar modulos criticos de uvicorn
+        try:
+            import uvicorn.server
+            import uvicorn.config
+            logger.info("[CHECK] Modulos de uvicorn importados correctamente")
+        except ImportError as ie:
+            logger.error(f"[ERROR] Falta modulo de uvicorn: {ie}")
+            raise
+        
+        logger.info("[UVICORN] Ejecutando uvicorn.run()...")
+        
         uvicorn.run(
             app,
             host="127.0.0.1",
             port=8000,
             log_level="info"
         )
+        
+        logger.info("[SUCCESS] Servidor FastAPI iniciado correctamente")
     except Exception as e:
-        logger.error(f"Error fatal al iniciar el backend: {str(e)}", exc_info=True)
+        logger.error(f"[FATAL] Error al iniciar el backend: {str(e)}", exc_info=True)
+        logger.error(f"[FATAL] Tipo de error: {type(e).__name__}")
+        import traceback
+        logger.error(f"[FATAL] Traceback completo:\n{traceback.format_exc()}")
         sys.exit(1)
