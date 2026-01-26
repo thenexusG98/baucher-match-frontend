@@ -110,8 +110,12 @@ jobs:
           }
           
           # Verificar pdftotext (opcional - continuar si falta)
+          $ErrorActionPreference = "SilentlyContinue"
           $pdftotextResult = & $pythonVenv -c "import pdftotext; print('[OK] pdftotext')" 2>&1
-          if ($LASTEXITCODE -eq 0) {
+          $pdftotextExitCode = $LASTEXITCODE
+          $ErrorActionPreference = "Continue"
+          
+          if ($pdftotextExitCode -eq 0) {
               Write-Host $pdftotextResult -ForegroundColor Green
           } else {
               Write-Host "[WARNING] pdftotext no disponible - el backend usara PyMuPDF" -ForegroundColor Yellow

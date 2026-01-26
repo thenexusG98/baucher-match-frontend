@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from app.utils.utils import pattern_date, phrases_to_ignore, partial_phrases_to_ignore
 
 from ..services.statement_processor import process_pdf_file, extract_transactions_partial_from_pdf
-import pdftotext
+from app.utils.pdf_extractor import PDF
 import shutil
 import os
 import time
@@ -62,7 +62,7 @@ async def upload_partial_pdf(file: UploadFile = File(...)):
         start_time = time.time()
         lineas_txt = []
         with open(temp_path, "rb") as f:
-            pdf = pdftotext.PDF(f, physical=True)
+            pdf = PDF(f, physical=True)
             for i, page in enumerate(pdf):
                 lines = page.split("\n")
                 deposito_line = ""
@@ -196,7 +196,7 @@ async def extract_transactions_json(
         folio_re = re.compile(r"FOLIO[:\s]*[:#\-]?\s*([0-9]+)", re.IGNORECASE)
 
         with open(temp_path, "rb") as f:
-            pdf = pdftotext.PDF(f, physical=True)
+            pdf = PDF(f, physical=True)
             
             # Procesar todas las páginas como un flujo continuo para no perder transacciones entre páginas
             all_lines = []

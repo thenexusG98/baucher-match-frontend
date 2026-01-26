@@ -1,9 +1,9 @@
 from app.utils.utils import pattern_date, phrases_to_ignore, partial_phrases_to_ignore
 from app.utils.functions import clean_total_movements_line, extract_fields
+from app.utils.pdf_extractor import PDF
  
 import re 
 import json
-import pdftotext
 
 data = []
 
@@ -14,7 +14,7 @@ def extract_transactions_from_pdf(pdf_name):
     data_line = []
 
     with open(pdf_name, "rb") as file:
-        pdf = pdftotext.PDF(file, physical=True)
+        pdf = PDF(file, physical=True)
         for page in pdf:
             lines = page.split("\n")
 
@@ -83,7 +83,7 @@ def extract_transactions_partial_from_pdf(pdf_name):
     data_line = []
 
     with open(pdf_name, "rb") as file:
-        pdf = pdftotext.PDF(file)
+        pdf = PDF(file)
         for page in pdf:
             
             lines = page.split("\n")

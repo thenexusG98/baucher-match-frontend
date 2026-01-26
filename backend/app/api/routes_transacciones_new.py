@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from app.utils.utils import pattern_date, phrases_to_ignore, partial_phrases_to_ignore
 
 from ..services.statement_processor import process_pdf_file, extract_transactions_partial_from_pdf
-import pdftotext
+from app.utils.pdf_extractor import PDF
 import shutil
 import os
 import time
@@ -48,7 +48,7 @@ async def extract_transactions_json(
         folio_re = re.compile(r"FOLIO[:\s]*[:#\-]?\s*([0-9]+)", re.IGNORECASE)
 
         with open(temp_path, "rb") as f:
-            pdf = pdftotext.PDF(f, physical=True)
+            pdf = PDF(f, physical=True)
             
             # Unificar todas las líneas de todas las páginas
             all_lines = []
