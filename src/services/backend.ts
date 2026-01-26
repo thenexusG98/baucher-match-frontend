@@ -53,12 +53,12 @@ export class BackendService {
    * @param maxAttempts Número máximo de intentos
    * @param delayMs Delay entre intentos en milisegundos
    */
-  async waitForReady(maxAttempts: number = 30, delayMs: number = 1000): Promise<boolean> {
-    console.log('⏳ Esperando que el backend esté listo...');
+  async waitForReady(maxAttempts: number = 40, delayMs: number = 1000): Promise<boolean> {
+    console.log('[DEBUG] Esperando que el backend este listo...');
     
-    // Dar tiempo inicial para que uvicorn inicie (especialmente en producción)
-    console.log('⏱️ Esperando 3 segundos para que uvicorn inicie...');
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Dar tiempo inicial para que uvicorn inicie (especialmente en produccion)
+    console.log('[DEBUG] Esperando 6 segundos para que uvicorn inicie...');
+    await new Promise(resolve => setTimeout(resolve, 6000));
     
     for (let i = 0; i < maxAttempts; i++) {
       try {
@@ -69,17 +69,20 @@ export class BackendService {
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Backend está listo y respondiendo:', data);
+          console.log('[SUCCESS] Backend esta listo y respondiendo:', data);
           return true;
+        } else {
+          console.log(`[DEBUG] Response status: ${response.status} ${response.statusText}`);
         }
       } catch (error) {
-        // Si es el último intento, mostrar el error
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        // Si es el ultimo intento, mostrar el error completo
         if (i === maxAttempts - 1) {
-          console.error('❌ Backend no respondió después de', maxAttempts, 'intentos');
-          console.error('Error:', error);
-          console.error('URL intentada:', this.healthEndpoint);
+          console.error('[ERROR] Backend no respondio despues de', maxAttempts, 'intentos');
+          console.error('[ERROR] Error:', errorMsg);
+          console.error('[ERROR] URL intentada:', this.healthEndpoint);
         } else {
-          console.log(`⏳ Intento ${i + 1}/${maxAttempts}... esperando...`);
+          console.log(`[DEBUG] Intento ${i + 1}/${maxAttempts}... (${errorMsg})`);
         }
         
         // Esperar antes del siguiente intento
@@ -100,17 +103,17 @@ export class BackendService {
       const isRunning = await this.checkStatus();
       
       if (!isRunning) {
-        console.log('🚀 Iniciando backend...');
+        console.log('[DEBUG] Iniciando backend...');
         await this.start();
       } else {
-        console.log('✅ Backend ya está corriendo');
+        console.log('[DEBUG] Backend ya esta corriendo');
       }
       
       // Esperar a que esté listo
       const isReady = await this.waitForReady();
       
       if (!isReady) {
-        throw new Error('El backend no pudo iniciarse correctamente');
+        throw new Error(`El backend inicio (PID existe) pero no responde en ${this.healthEndpoint}. Verifica que uvicorn este corriendo en el puerto 8000.`);
       }
       
       return true;

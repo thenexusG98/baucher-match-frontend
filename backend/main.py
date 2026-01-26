@@ -53,7 +53,7 @@ def setup_logging():
     
     logger = logging.getLogger(__name__)
     logger.info(f"Sistema de logging inicializado. Archivo: {log_file}")
-    logger.info(f"Modo: {'Producción' if getattr(sys, 'frozen', False) else 'Desarrollo'}")
+    logger.info(f"Modo: {'Produccion' if getattr(sys, 'frozen', False) else 'Desarrollo'}")
     
     return logger
 
@@ -61,8 +61,8 @@ def setup_logging():
 logger = setup_logging()
 
 def signal_handler(sig, frame):
-    """Manejador de señales para cerrar el servidor correctamente"""
-    logger.info('🛑 Cerrando backend...')
+    """Manejador de senales para cerrar el servidor correctamente"""
+    logger.info('[SHUTDOWN] Cerrando backend...')
     sys.exit(0)
 
 # Registrar manejadores de señales
@@ -71,7 +71,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 
 if __name__ == "__main__":
     try:
-        logger.info("🚀 Iniciando backend FastAPI en http://127.0.0.1:8000")
+        logger.info("[START] Iniciando backend FastAPI en http://127.0.0.1:8000")
         logger.info(f"Python version: {sys.version}")
         logger.info(f"Working directory: {os.getcwd()}")
         

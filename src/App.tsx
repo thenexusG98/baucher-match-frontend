@@ -11,23 +11,21 @@ function App() {
     const initBackend = async () => {
       try {
         setIsInitializing(true);
-        console.log('🚀 Inicializando backend...');
+        console.log('[DEBUG] Inicializando backend...');
         
         const success = await backendService.initialize();
         
         if (success) {
           setBackendReady(true);
-          console.log('✅ Backend inicializado correctamente');
+          console.log('[SUCCESS] Backend inicializado correctamente');
         } else {
           setBackendError('El backend no pudo iniciarse. Por favor verifica los logs.');
         }
       } catch (error) {
-        console.error('❌ Error al inicializar backend:', error);
-        setBackendError(
-          error instanceof Error 
-            ? error.message 
-            : 'Error desconocido al inicializar el backend'
-        );
+        console.error('[ERROR] Error al inicializar backend:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Error desconocido al inicializar el backend';
+        console.error('[ERROR] Mensaje completo:', errorMessage);
+        setBackendError(errorMessage);
       } finally {
         setIsInitializing(false);
       }
