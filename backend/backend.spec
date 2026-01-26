@@ -21,9 +21,9 @@ print(f"Python executable: {sys.executable}")
 # Intentar importar collect_all
 try:
     from PyInstaller.utils.hooks import collect_all, collect_submodules
-    print("✓ PyInstaller hooks importados correctamente")
+    print("[OK] PyInstaller hooks importados correctamente")
     
-    # Recolectar todos los módulos
+    # Recolectar todos los modulos
     datas = []
     binaries = []
     hiddenimports = []
@@ -36,31 +36,31 @@ try:
             datas += pkg_datas
             binaries += pkg_binaries
             hiddenimports += pkg_hiddenimports
-            print(f"    ✓ {package}: {len(pkg_hiddenimports)} hiddenimports, {len(pkg_datas)} datas")
+            print(f"    [OK] {package}: {len(pkg_hiddenimports)} hiddenimports, {len(pkg_datas)} datas")
         except Exception as e:
-            print(f"    ✗ Error con {package}: {e}")
-            # Si falla collect_all, al menos recolectar submódulos
+            print(f"    [ERROR] Error con {package}: {e}")
+            # Si falla collect_all, al menos recolectar submodulos
             try:
                 submods = collect_submodules(package)
                 hiddenimports += submods
-                print(f"    ↻ Usando collect_submodules: {len(submods)} módulos")
+                print(f"    [RETRY] Usando collect_submodules: {len(submods)} modulos")
             except:
-                print(f"    ✗ También falló collect_submodules")
+                print(f"    [ERROR] Tambien fallo collect_submodules")
     
     # Agregar el directorio app
     datas.append(('app', 'app'))
     
-    # Hiddenimports adicionales explícitos
+    # Hiddenimports adicionales explicitos
     additional_imports = [
         'multipart', 'python_multipart', 'email.mime', 'email.mime.multipart',
         'email.mime.text', 'click', 'fitz', 'pdftotext',
-        # Módulos críticos de uvicorn que a veces PyInstaller no detecta
+        # Modulos criticos de uvicorn que a veces PyInstaller no detecta
         'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
         'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto',
         'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto',
         'uvicorn.lifespan', 'uvicorn.lifespan.on', 'uvicorn.server',
         'uvicorn.config', 'uvicorn.main', 'uvicorn.importer',
-        # Módulos de FastAPI
+        # Modulos de FastAPI
         'fastapi.routing', 'fastapi.encoders', 'fastapi.exceptions',
     ]
     hiddenimports += additional_imports
@@ -70,8 +70,8 @@ try:
     print(f"Total binaries: {len(binaries)}")
     
 except ImportError as e:
-    print(f"✗ Error importando PyInstaller hooks: {e}")
-    print("Usando configuración mínima...")
+    print(f"[ERROR] Error importando PyInstaller hooks: {e}")
+    print("Usando configuracion minima...")
     datas = [('app', 'app')]
     binaries = []
     hiddenimports = [
@@ -119,7 +119,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # Cambiar a False si no quieres consola en producción
+    console=True,  # Cambiar a False si no quieres consola en produccion
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
