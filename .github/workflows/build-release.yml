@@ -90,11 +90,18 @@ jobs:
           
           # Intentar instalar pdftotext (opcional - no falla si no funciona)
           Write-Host "`nIntentando instalar pdftotext..." -ForegroundColor Yellow
-          & $pipVenv install pdftotext 2>&1 | Out-Null
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "[OK] pdftotext instalado" -ForegroundColor Green
-          } else {
+          try {
+              $ErrorActionPreference = "Continue"
+              & $pipVenv install pdftotext 2>&1 | Out-Null
+              if ($LASTEXITCODE -eq 0) {
+                  Write-Host "[OK] pdftotext instalado" -ForegroundColor Green
+              } else {
+                  Write-Host "[WARNING] pdftotext no disponible - se usara PyMuPDF" -ForegroundColor Yellow
+              }
+          } catch {
               Write-Host "[WARNING] pdftotext no disponible - se usara PyMuPDF" -ForegroundColor Yellow
+          } finally {
+              $ErrorActionPreference = "Stop"
           }
           
           # Instalar PyInstaller
