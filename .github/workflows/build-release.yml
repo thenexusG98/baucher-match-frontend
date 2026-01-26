@@ -128,11 +128,18 @@ jobs:
           }
           
           # Verificar pdftotext (opcional - no afecta $allOk)
-          $pdftotextResult = & $pythonVenv -c "import pdftotext; print('[OK] pdftotext')" 2>&1
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host $pdftotextResult -ForegroundColor Green
-          } else {
+          try {
+              $ErrorActionPreference = "Continue"
+              $pdftotextResult = & $pythonVenv -c "import pdftotext; print('[OK] pdftotext')" 2>&1
+              if ($LASTEXITCODE -eq 0) {
+                  Write-Host $pdftotextResult -ForegroundColor Green
+              } else {
+                  Write-Host "[WARNING] pdftotext no disponible - el backend usara PyMuPDF" -ForegroundColor Yellow
+              }
+          } catch {
               Write-Host "[WARNING] pdftotext no disponible - el backend usara PyMuPDF" -ForegroundColor Yellow
+          } finally {
+              $ErrorActionPreference = "Stop"
           }
           
           # Solo fallar si faltan módulos críticos
