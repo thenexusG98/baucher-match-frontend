@@ -66,12 +66,29 @@ jobs:
           Write-Host "=== Instalando dependencias Python ===" -ForegroundColor Cyan
           & $pythonVenv -m pip install --upgrade pip
           
-          # Instalar requirements.txt completo (pdftotext fallará, pero continuará con PyMuPDF)
-          Write-Host "`nInstalando requirements.txt..." -ForegroundColor Yellow
-          & $pipVenv install -r backend\requirements.txt 2>&1 | Out-Null
+          # Instalar requirements.txt sin pdftotext primero
+          Write-Host "`nInstalando dependencias (excepto pdftotext)..." -ForegroundColor Yellow
+          Get-Content backend\requirements.txt | Where-Object { 
+              $_ -notmatch '^pdftotext' -and $_.Trim() -ne '' -and -not $_.StartsWith('#') 
+          } | ForEach-Object {
+              $package = $_.Trim()
+              Write-Host "  - $package" -ForegroundColor Gray
+              & $pipVenv install $package --quiet
+          }
+          
+          # Intentar instalar pdftotext (opcional)
+          Write-Host "`nIntentando instalar pdftotext..." -ForegroundColor Yellow
+          $ErrorActionPreference = "SilentlyContinue"
+          & $pipVenv install pdftotext 2>&1 | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "[OK] pdftotext instalado" -ForegroundColor Green
+          } else {
+              Write-Host "[WARNING] pdftotext no disponible - se usara PyMuPDF" -ForegroundColor Yellow
+          }
+          $ErrorActionPreference = "Continue"
           
           # Instalar PyInstaller
-          Write-Host "Instalando PyInstaller..." -ForegroundColor Yellow
+          Write-Host "`nInstalando PyInstaller..." -ForegroundColor Yellow
           & $pipVenv install pyinstaller
           
           # Verificar módulos críticos
