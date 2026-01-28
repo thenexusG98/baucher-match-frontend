@@ -67,11 +67,22 @@ try:
         'uvicorn.supervisors.multiprocess', 'uvicorn.supervisors.basereload',
         # Modulos de FastAPI
         'fastapi.routing', 'fastapi.encoders', 'fastapi.exceptions',
-        # Asyncio y dependencias
+        # Asyncio y dependencias CRITICAS para Windows
         'asyncio', 'asyncio.runners', 'asyncio.events', 'asyncio.base_events',
+        'asyncio.windows_events', 'asyncio.windows_utils',  # Especifico para Windows
+        'asyncio.proactor_events', 'asyncio.selector_events',
+        'asyncio.tasks', 'asyncio.coroutines', 'asyncio.futures',
+        'asyncio.locks', 'asyncio.queues', 'asyncio.streams',
+        'asyncio.subprocess', 'asyncio.transports', 'asyncio.protocols',
+        # Selectors para I/O
+        'selectors', 'select',
         # HTTP parsers
-        'h11', 'h11._connection', 'h11._readers', 'h11._writers',
-        'httptools', 'httptools.parser',
+        'h11', 'h11._connection', 'h11._readers', 'h11._writers', 'h11._state',
+        'httptools', 'httptools.parser', 'httptools.parser.errors',
+        # Websockets
+        'websockets', 'wsproto',
+        # Typing extensions
+        'typing_extensions',
     ]
     hiddenimports += additional_imports
     

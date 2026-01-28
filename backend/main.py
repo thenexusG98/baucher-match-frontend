@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 import os
 import socket
+import asyncio
 
 # Agregar el directorio app al path para imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -87,6 +88,33 @@ if __name__ == "__main__":
         logger.info("[START] Iniciando backend FastAPI en http://127.0.0.1:8000")
         logger.info(f"Python version: {sys.version}")
         logger.info(f"Working directory: {os.getcwd()}")
+        logger.info(f"Frozen (PyInstaller): {getattr(sys, 'frozen', False)}")
+        
+        # Diagnostico de asyncio ANTES de iniciar uvicorn
+        logger.info("[ASYNCIO] Diagnosticando event loop...")
+        try:
+            # Verificar que asyncio esta disponible
+            loop_policy = asyncio.get_event_loop_policy()
+            logger.info(f"[ASYNCIO] Event loop policy: {type(loop_policy).__name__}")
+            
+            # En Windows, asyncio usa ProactorEventLoop por defecto en Python 3.8+
+            if sys.platform == 'win32':
+                logger.info("[ASYNCIO] Plataforma Windows detectada")
+                # Verificar que el loop de Windows esta disponible
+                try:
+                    import asyncio.windows_events
+                    logger.info("[ASYNCIO] asyncio.windows_events disponible")
+                except ImportError as e:
+                    logger.error(f"[ASYNCIO] ERROR: asyncio.windows_events no disponible: {e}")
+            
+            # Intentar crear un loop de prueba
+            test_loop = asyncio.new_event_loop()
+            logger.info(f"[ASYNCIO] Loop de prueba creado: {type(test_loop).__name__}")
+            test_loop.close()
+            logger.info("[ASYNCIO] Loop de prueba cerrado correctamente")
+            
+        except Exception as e:
+            logger.error(f"[ASYNCIO] ERROR en diagnostico: {e}", exc_info=True)
         
         # Verificar si el puerto ya esta en uso
         if not check_port_available("127.0.0.1", 8000):
@@ -109,31 +137,33 @@ if __name__ == "__main__":
             logger.error(f"[ERROR] Falta modulo de uvicorn: {ie}")
             raise
         
-        logger.info("[UVICORN] Creando configuracion del servidor...")
+        logger.info("[UVICORN] Iniciando servidor con asyncio explicito...")
         
-        # Crear configuracion de uvicorn manualmente para mejor control
-        config = uvicorn.Config(
-            app=app,
+        # Flush logs antes de iniciar
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        
+        # Configurar y ejecutar uvicorn con asyncio explicito
+        # Esto es necesario para PyInstaller donde el event loop puede no estar correctamente configurado
+        
+        # Opcion 1: Usar uvicorn.run con modo programatico
+        logger.info("[UVICORN] Ejecutando servidor en http://127.0.0.1:8000...")
+        
+        # Usar sys.stdout.flush() para asegurar que los logs se escriban
+        sys.stdout.flush()
+        sys.stderr.flush()
+        
+        # Ejecutar uvicorn con configuracion minima
+        uvicorn.run(
+            app,
             host="127.0.0.1",
             port=8000,
             log_level="info",
             access_log=True,
             use_colors=False,
-            loop="asyncio",  # Especificar loop explicito
+            loop="asyncio",
+            workers=1,  # Un solo worker para PyInstaller
         )
-        
-        logger.info("[UVICORN] Creando servidor...")
-        server = uvicorn.Server(config)
-        
-        logger.info("[UVICORN] Iniciando servidor (esto bloqueara el hilo principal)...")
-        logger.info("[UVICORN] Si ves este mensaje, uvicorn deberia estar escuchando en http://127.0.0.1:8000")
-        
-        # Flush logs antes de bloquear
-        for handler in logging.getLogger().handlers:
-            handler.flush()
-        
-        # Esto bloqueara hasta que el servidor se detenga
-        server.run()
         
         logger.info("[SHUTDOWN] Servidor detenido correctamente")
     except Exception as e:
