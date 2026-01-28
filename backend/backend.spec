@@ -56,12 +56,22 @@ try:
         'email.mime.text', 'click', 'fitz', 'pdftotext',
         # Modulos criticos de uvicorn que a veces PyInstaller no detecta
         'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
+        'uvicorn.loops.asyncio', 'uvicorn.loops.uvloop',
         'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.http.h11_impl', 'uvicorn.protocols.http.httptools_impl',
         'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto',
-        'uvicorn.lifespan', 'uvicorn.lifespan.on', 'uvicorn.server',
-        'uvicorn.config', 'uvicorn.main', 'uvicorn.importer',
+        'uvicorn.protocols.websockets.wsproto_impl', 'uvicorn.protocols.websockets.websockets_impl',
+        'uvicorn.lifespan', 'uvicorn.lifespan.on', 'uvicorn.lifespan.off',
+        'uvicorn.server', 'uvicorn.config', 'uvicorn.main', 'uvicorn.importer',
+        'uvicorn._handlers', 'uvicorn.supervisors', 'uvicorn.supervisors.statreload',
+        'uvicorn.supervisors.multiprocess', 'uvicorn.supervisors.basereload',
         # Modulos de FastAPI
         'fastapi.routing', 'fastapi.encoders', 'fastapi.exceptions',
+        # Asyncio y dependencias
+        'asyncio', 'asyncio.runners', 'asyncio.events', 'asyncio.base_events',
+        # HTTP parsers
+        'h11', 'h11._connection', 'h11._readers', 'h11._writers',
+        'httptools', 'httptools.parser',
     ]
     hiddenimports += additional_imports
     

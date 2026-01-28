@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 import os
+import socket
 
 # Agregar el directorio app al path para imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -65,6 +66,18 @@ def signal_handler(sig, frame):
     logger.info('[SHUTDOWN] Cerrando backend...')
     sys.exit(0)
 
+def check_port_available(host, port):
+    """Verifica si un puerto esta disponible"""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1)
+    try:
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result != 0  # True si esta disponible (no se pudo conectar)
+    except Exception as e:
+        logger.error(f"Error verificando puerto: {e}")
+        return False
+
 # Registrar manejadores de señales
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
@@ -74,6 +87,14 @@ if __name__ == "__main__":
         logger.info("[START] Iniciando backend FastAPI en http://127.0.0.1:8000")
         logger.info(f"Python version: {sys.version}")
         logger.info(f"Working directory: {os.getcwd()}")
+        
+        # Verificar si el puerto ya esta en uso
+        if not check_port_available("127.0.0.1", 8000):
+            logger.error("[ERROR] Puerto 8000 ya esta en uso!")
+            logger.error("[ERROR] Verifica que no haya otra instancia del backend corriendo")
+            sys.exit(1)
+        else:
+            logger.info("[CHECK] Puerto 8000 disponible")
         
         # Verificar que la app FastAPI se importo correctamente
         logger.info(f"[CHECK] App FastAPI cargada: {type(app)}")
@@ -88,26 +109,41 @@ if __name__ == "__main__":
             logger.error(f"[ERROR] Falta modulo de uvicorn: {ie}")
             raise
         
-        logger.info("[UVICORN] Ejecutando uvicorn.run()...")
+        logger.info("[UVICORN] Creando configuracion del servidor...")
         
-        # Configuracion de uvicorn para PyInstaller
-        uvicorn_config = {
-            "app": app,
-            "host": "127.0.0.1",
-            "port": 8000,
-            "log_level": "info",
-            "access_log": True,
-            "use_colors": False,  # Desactivar colores para PyInstaller
-        }
+        # Crear configuracion de uvicorn manualmente para mejor control
+        config = uvicorn.Config(
+            app=app,
+            host="127.0.0.1",
+            port=8000,
+            log_level="info",
+            access_log=True,
+            use_colors=False,
+            loop="asyncio",  # Especificar loop explicito
+        )
         
-        logger.info(f"[UVICORN] Configuracion: {uvicorn_config}")
+        logger.info("[UVICORN] Creando servidor...")
+        server = uvicorn.Server(config)
         
-        uvicorn.run(**uvicorn_config)
+        logger.info("[UVICORN] Iniciando servidor (esto bloqueara el hilo principal)...")
+        logger.info("[UVICORN] Si ves este mensaje, uvicorn deberia estar escuchando en http://127.0.0.1:8000")
         
-        logger.info("[SUCCESS] Servidor FastAPI iniciado correctamente")
+        # Flush logs antes de bloquear
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        
+        # Esto bloqueara hasta que el servidor se detenga
+        server.run()
+        
+        logger.info("[SHUTDOWN] Servidor detenido correctamente")
     except Exception as e:
         logger.error(f"[FATAL] Error al iniciar el backend: {str(e)}", exc_info=True)
         logger.error(f"[FATAL] Tipo de error: {type(e).__name__}")
         import traceback
         logger.error(f"[FATAL] Traceback completo:\n{traceback.format_exc()}")
+        
+        # Flush logs antes de salir
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        
         sys.exit(1)
