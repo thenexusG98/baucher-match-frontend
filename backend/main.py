@@ -90,12 +90,19 @@ if __name__ == "__main__":
         
         logger.info("[UVICORN] Ejecutando uvicorn.run()...")
         
-        uvicorn.run(
-            app,
-            host="127.0.0.1",
-            port=8000,
-            log_level="info"
-        )
+        # Configuracion de uvicorn para PyInstaller
+        uvicorn_config = {
+            "app": app,
+            "host": "127.0.0.1",
+            "port": 8000,
+            "log_level": "info",
+            "access_log": True,
+            "use_colors": False,  # Desactivar colores para PyInstaller
+        }
+        
+        logger.info(f"[UVICORN] Configuracion: {uvicorn_config}")
+        
+        uvicorn.run(**uvicorn_config)
         
         logger.info("[SUCCESS] Servidor FastAPI iniciado correctamente")
     except Exception as e:
