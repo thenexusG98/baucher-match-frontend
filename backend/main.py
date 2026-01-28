@@ -143,18 +143,11 @@ if __name__ == "__main__":
         for handler in logging.getLogger().handlers:
             handler.flush()
         
-        # Configurar y ejecutar uvicorn con asyncio explicito
-        # Esto es necesario para PyInstaller donde el event loop puede no estar correctamente configurado
+        # IMPORTANTE: uvicorn.run() falla silenciosamente en PyInstaller
+        # Usamos el servidor directamente con asyncio manual
         
-        # Opcion 1: Usar uvicorn.run con modo programatico
-        logger.info("[UVICORN] Ejecutando servidor en http://127.0.0.1:8000...")
-        
-        # Usar sys.stdout.flush() para asegurar que los logs se escriban
-        sys.stdout.flush()
-        sys.stderr.flush()
-        
-        # Ejecutar uvicorn con configuracion minima
-        uvicorn.run(
+        logger.info("[UVICORN] Creando configuracion del servidor...")
+        config = uvicorn.Config(
             app,
             host="127.0.0.1",
             port=8000,
@@ -162,8 +155,40 @@ if __name__ == "__main__":
             access_log=True,
             use_colors=False,
             loop="asyncio",
-            workers=1,  # Un solo worker para PyInstaller
         )
+        
+        logger.info("[UVICORN] Creando instancia del servidor...")
+        server = uvicorn.Server(config)
+        
+        # Ejecutar el servidor con asyncio explicito
+        logger.info("[UVICORN] Iniciando event loop manualmente...")
+        
+        try:
+            # Obtener o crear event loop
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            logger.info(f"[UVICORN] Event loop obtenido: {type(loop).__name__}")
+            logger.info("[UVICORN] Ejecutando servidor...")
+            
+            # Flush antes de bloquear
+            sys.stdout.flush()
+            sys.stderr.flush()
+            
+            # Ejecutar el servidor en el loop
+            loop.run_until_complete(server.serve())
+            
+        except KeyboardInterrupt:
+            logger.info("[UVICORN] Servidor interrumpido por usuario")
+        finally:
+            logger.info("[UVICORN] Cerrando event loop...")
+            loop.close()
         
         logger.info("[SHUTDOWN] Servidor detenido correctamente")
     except Exception as e:
