@@ -384,6 +384,20 @@ jobs:
     if: github.event_name == 'push'
     
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from package.json
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          BUILD_NUMBER=${{ github.run_number }}
+          FULL_VERSION="v${VERSION}.${BUILD_NUMBER}"
+          echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${FULL_VERSION}"
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -395,13 +409,14 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: build-${{ github.sha }}
-          name: Build ${{ github.ref_name }} - ${{ github.sha }}
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
           body: |
-            ## 🚀 Baucher Match - Build Automático
+            ## 🚀 Baucher Match - Release ${{ steps.get_version.outputs.version }}
             
-            ### Branch: `${{ github.ref_name }}`
-            ### Commit: `${{ github.sha }}`
+            ### 📅 Fecha: ${{ github.event.head_commit.timestamp }}
+            ### 🔨 Build #${{ github.run_number }}
+            ### 📝 Commit: [`${{ github.sha }}`](${{ github.event.repository.html_url }}/commit/${{ github.sha }})
             
             ---
             
@@ -436,7 +451,8 @@ jobs:
             
             Si encuentras algún problema, por favor abre un issue en el repositorio.
           draft: false
-          prerelease: true
+          prerelease: false
+          make_latest: true
           files: |
             artifacts/**/*.msi
             artifacts/**/*.exe
