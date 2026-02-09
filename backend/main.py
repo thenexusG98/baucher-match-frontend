@@ -202,37 +202,106 @@ if __name__ == "__main__":
                 if not data:
                     return
                 
-                # Procesar con FastAPI
-                # (Esto es simplificado - en produccion usar ASGI completo)
-                from starlette.testclient import TestClient
-                client = TestClient(app)
+                # Parsear request HTTP
+                request_text = data.decode('utf-8')
+                lines = request_text.split('\r\n')
+                request_line = lines[0]
                 
-                # Parsear request basico
-                request_line = data.decode('utf-8').split('\r\n')[0]
                 parts = request_line.split(' ')
                 if len(parts) >= 2:
                     method = parts[0]
                     path = parts[1]
                     
-                    # Hacer request a FastAPI
-                    if method == 'GET':
-                        response = client.get(path)
-                        
-                        # Enviar response HTTP
-                        http_response = f"HTTP/1.1 {response.status_code} OK\r\n"
-                        http_response += "Content-Type: application/json\r\n"
-                        http_response += f"Content-Length: {len(response.content)}\r\n"
+                    # Parsear headers
+                    headers = {}
+                    for line in lines[1:]:
+                        if ':' in line:
+                            key, value = line.split(':', 1)
+                            headers[key.strip().lower()] = value.strip()
+                    
+                    # Preparar scope ASGI
+                    scope = {
+                        'type': 'http',
+                        'asgi': {'version': '3.0'},
+                        'http_version': '1.1',
+                        'method': method,
+                        'scheme': 'http',
+                        'path': path,
+                        'query_string': b'',
+                        'root_path': '',
+                        'headers': [(k.encode(), v.encode()) for k, v in headers.items()],
+                        'server': ('127.0.0.1', 8000),
+                        'client': writer.get_extra_info('peername', ('127.0.0.1', 0)),
+                    }
+                    
+                    # Preparar receive/send
+                    response_started = False
+                    response_body = []
+                    response_status = 200
+                    response_headers = []
+                    
+                    async def receive():
+                        return {'type': 'http.request', 'body': b''}
+                    
+                    async def send(message):
+                        nonlocal response_started, response_body, response_status, response_headers
+                        if message['type'] == 'http.response.start':
+                            response_status = message['status']
+                            response_headers = message.get('headers', [])
+                            response_started = True
+                        elif message['type'] == 'http.response.body':
+                            body = message.get('body', b'')
+                            if body:
+                                response_body.append(body)
+                    
+                    # Llamar a FastAPI via ASGI
+                    await app(scope, receive, send)
+                    
+                    # Construir response HTTP
+                    full_body = b''.join(response_body)
+                    http_response = f"HTTP/1.1 {response_status} OK\r\n"
+                    
+                    # Agregar headers de la app
+                    has_cors = False
+                    for header_name, header_value in response_headers:
+                        header_line = f"{header_name.decode()}: {header_value.decode()}\r\n"
+                        http_response += header_line
+                        if header_name.decode().lower() == 'access-control-allow-origin':
+                            has_cors = True
+                    
+                    # Agregar CORS si no existe
+                    if not has_cors:
                         http_response += "Access-Control-Allow-Origin: *\r\n"
-                        http_response += "\r\n"
-                        
-                        writer.write(http_response.encode())
-                        writer.write(response.content)
-                        await writer.drain()
+                    
+                    http_response += f"Content-Length: {len(full_body)}\r\n"
+                    http_response += "\r\n"
+                    
+                    # Enviar response
+                    writer.write(http_response.encode())
+                    writer.write(full_body)
+                    await writer.drain()
+                    
             except Exception as e:
-                logger.error(f"[UVICORN] Error manejando cliente: {e}")
+                logger.error(f"[UVICORN] Error manejando cliente: {e}", exc_info=True)
+                # Enviar error 500
+                try:
+                    error_body = b'{"detail":"Internal Server Error"}'
+                    error_response = f"HTTP/1.1 500 Internal Server Error\r\n"
+                    error_response += "Content-Type: application/json\r\n"
+                    error_response += "Access-Control-Allow-Origin: *\r\n"
+                    error_response += f"Content-Length: {len(error_body)}\r\n"
+                    error_response += "\r\n"
+                    writer.write(error_response.encode())
+                    writer.write(error_body)
+                    await writer.drain()
+                except:
+                    pass
             finally:
-                writer.close()
-                await writer.wait_closed()
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except:
+                    pass
         
         async def serve_forever():
             """Loop principal del servidor"""

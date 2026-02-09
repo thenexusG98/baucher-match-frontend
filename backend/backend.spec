@@ -67,6 +67,11 @@ try:
         'uvicorn.supervisors.multiprocess', 'uvicorn.supervisors.basereload',
         # Modulos de FastAPI
         'fastapi.routing', 'fastapi.encoders', 'fastapi.exceptions',
+        # Modulos ASGI de Starlette (CRITICO para servidor HTTP directo)
+        'starlette.applications', 'starlette.routing', 'starlette.requests',
+        'starlette.responses', 'starlette.middleware', 'starlette.middleware.cors',
+        'starlette.exceptions', 'starlette.status', 'starlette.datastructures',
+        'starlette.background', 'starlette.concurrency', 'starlette.types',
         # Asyncio y dependencias CRITICAS para Windows
         'asyncio', 'asyncio.runners', 'asyncio.events', 'asyncio.base_events',
         'asyncio.windows_events', 'asyncio.windows_utils',  # Especifico para Windows
