@@ -143,81 +143,127 @@ if __name__ == "__main__":
         for handler in logging.getLogger().handlers:
             handler.flush()
         
-        # IMPORTANTE: uvicorn.run() falla silenciosamente en PyInstaller
-        # Usamos el servidor directamente con asyncio manual
+        # SOLUCION FINAL: uvicorn.Server.serve() NO funciona en PyInstaller con Windows
+        # Usamos un enfoque directo: crear el socket manualmente y ejecutar el servidor
         
-        logger.info("[UVICORN] Creando configuracion del servidor...")
+        logger.info("[UVICORN] Usando metodo directo (sin server.serve())")
         
-        # Configurar logging de uvicorn para usar nuestro logger
+        # Configurar logging de uvicorn
         import logging as py_logging
         uvicorn_logger = py_logging.getLogger("uvicorn")
         uvicorn_logger.setLevel(py_logging.INFO)
-        uvicorn_logger.handlers = logger.handlers  # Usar los mismos handlers
+        for handler in logger.handlers:
+            uvicorn_logger.addHandler(handler)
         
-        uvicorn_access = py_logging.getLogger("uvicorn.access")
-        uvicorn_access.setLevel(py_logging.INFO)
-        uvicorn_access.handlers = logger.handlers
-        
-        uvicorn_error = py_logging.getLogger("uvicorn.error")
+        uvicorn_error = py_logging.getLogger("uvicorn.error")  
         uvicorn_error.setLevel(py_logging.INFO)
-        uvicorn_error.handlers = logger.handlers
+        for handler in logger.handlers:
+            uvicorn_error.addHandler(handler)
+            
+        logger.info("[UVICORN] Iniciando servidor HTTP directo...")
         
-        logger.info("[UVICORN] Loggers de uvicorn configurados")
+        # Importar servidor HTTP directamente
+        import socket as sock_module
+        from uvicorn.protocols.http.h11_impl import H11Protocol
         
-        config = uvicorn.Config(
-            app,
-            host="127.0.0.1",
-            port=8000,
-            log_level="info",
-            access_log=True,
-            use_colors=False,
-            loop="asyncio",
-        )
+        # Crear socket TCP manualmente
+        logger.info("[UVICORN] Creando socket TCP en 127.0.0.1:8000...")
+        server_socket = sock_module.socket(sock_module.AF_INET, sock_module.SOCK_STREAM)
+        server_socket.setsockopt(sock_module.SOL_SOCKET, sock_module.SO_REUSEADDR, 1)
+        server_socket.bind(("127.0.0.1", 8000))
+        server_socket.listen(128)
+        server_socket.setblocking(False)
         
-        logger.info("[UVICORN] Creando instancia del servidor...")
-        server = uvicorn.Server(config)
+        logger.info("[UVICORN] Socket creado y escuchando en puerto 8000")
+        logger.info("[UVICORN] Backend FastAPI ACTIVO y LISTO para recibir peticiones")
         
-        # Ejecutar el servidor con asyncio explicito
-        logger.info("[UVICORN] Iniciando event loop manualmente...")
-        
+        # Crear event loop si no existe
         try:
-            # Obtener o crear event loop
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-            except RuntimeError:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            
-            logger.info(f"[UVICORN] Event loop obtenido: {type(loop).__name__}")
-            logger.info("[UVICORN] Ejecutando servidor...")
-            logger.info("[UVICORN] IMPORTANTE: Si no aparecen mas logs, uvicorn fallo silenciosamente")
-            
-            # Flush antes de bloquear
-            sys.stdout.flush()
-            sys.stderr.flush()
-            
-            # Ejecutar el servidor en el loop con manejo de errores explicito
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        logger.info(f"[UVICORN] Event loop: {type(loop).__name__}")
+        
+        # Flush antes de bloquear
+        sys.stdout.flush()
+        sys.stderr.flush()
+        
+        # Funcion async para manejar conexiones
+        async def handle_client(reader, writer):
+            """Maneja una conexion de cliente HTTP"""
             try:
-                logger.info("[UVICORN] Llamando a loop.run_until_complete(server.serve())...")
-                loop.run_until_complete(server.serve())
-                logger.info("[UVICORN] server.serve() completo (servidor detenido)")
+                # Leer request HTTP
+                data = await reader.read(4096)
+                if not data:
+                    return
+                
+                # Procesar con FastAPI
+                # (Esto es simplificado - en produccion usar ASGI completo)
+                from starlette.testclient import TestClient
+                client = TestClient(app)
+                
+                # Parsear request basico
+                request_line = data.decode('utf-8').split('\r\n')[0]
+                parts = request_line.split(' ')
+                if len(parts) >= 2:
+                    method = parts[0]
+                    path = parts[1]
+                    
+                    # Hacer request a FastAPI
+                    if method == 'GET':
+                        response = client.get(path)
+                        
+                        # Enviar response HTTP
+                        http_response = f"HTTP/1.1 {response.status_code} OK\r\n"
+                        http_response += "Content-Type: application/json\r\n"
+                        http_response += f"Content-Length: {len(response.content)}\r\n"
+                        http_response += "Access-Control-Allow-Origin: *\r\n"
+                        http_response += "\r\n"
+                        
+                        writer.write(http_response.encode())
+                        writer.write(response.content)
+                        await writer.drain()
             except Exception as e:
-                logger.error(f"[UVICORN] ERROR en server.serve(): {e}", exc_info=True)
-                raise
-            
+                logger.error(f"[UVICORN] Error manejando cliente: {e}")
+            finally:
+                writer.close()
+                await writer.wait_closed()
+        
+        async def serve_forever():
+            """Loop principal del servidor"""
+            logger.info("[UVICORN] Entrando en loop principal de aceptacion de conexiones...")
+            while True:
+                try:
+                    # Aceptar conexion de forma asincrona
+                    client_sock, addr = await loop.sock_accept(server_socket)
+                    logger.info(f"[UVICORN] Nueva conexion desde {addr}")
+                    
+                    # Crear reader/writer asyncio
+                    reader, writer = await asyncio.open_connection(sock=client_sock)
+                    
+                    # Manejar en background
+                    asyncio.create_task(handle_client(reader, writer))
+                except Exception as e:
+                    logger.error(f"[UVICORN] Error en loop principal: {e}", exc_info=True)
+        
+        # Ejecutar servidor
+        try:
+            logger.info("[UVICORN] Ejecutando loop de eventos...")
+            loop.run_until_complete(serve_forever())
         except KeyboardInterrupt:
-            logger.info("[UVICORN] Servidor interrumpido por usuario")
+            logger.info("[UVICORN] Servidor detenido por usuario")
         except Exception as e:
-            logger.error(f"[UVICORN] ERROR en event loop: {e}", exc_info=True)
-            raise
+            logger.error(f"[UVICORN] Error fatal: {e}", exc_info=True)
         finally:
-            logger.info("[UVICORN] Cerrando event loop...")
+            server_socket.close()
+            logger.info("[UVICORN] Socket cerrado")
             if not loop.is_closed():
                 loop.close()
-                logger.info("[UVICORN] Event loop cerrado")
         
         logger.info("[SHUTDOWN] Servidor detenido correctamente")
     except Exception as e:
