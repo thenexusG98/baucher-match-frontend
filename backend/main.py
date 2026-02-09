@@ -147,6 +147,23 @@ if __name__ == "__main__":
         # Usamos el servidor directamente con asyncio manual
         
         logger.info("[UVICORN] Creando configuracion del servidor...")
+        
+        # Configurar logging de uvicorn para usar nuestro logger
+        import logging as py_logging
+        uvicorn_logger = py_logging.getLogger("uvicorn")
+        uvicorn_logger.setLevel(py_logging.INFO)
+        uvicorn_logger.handlers = logger.handlers  # Usar los mismos handlers
+        
+        uvicorn_access = py_logging.getLogger("uvicorn.access")
+        uvicorn_access.setLevel(py_logging.INFO)
+        uvicorn_access.handlers = logger.handlers
+        
+        uvicorn_error = py_logging.getLogger("uvicorn.error")
+        uvicorn_error.setLevel(py_logging.INFO)
+        uvicorn_error.handlers = logger.handlers
+        
+        logger.info("[UVICORN] Loggers de uvicorn configurados")
+        
         config = uvicorn.Config(
             app,
             host="127.0.0.1",
@@ -176,19 +193,31 @@ if __name__ == "__main__":
             
             logger.info(f"[UVICORN] Event loop obtenido: {type(loop).__name__}")
             logger.info("[UVICORN] Ejecutando servidor...")
+            logger.info("[UVICORN] IMPORTANTE: Si no aparecen mas logs, uvicorn fallo silenciosamente")
             
             # Flush antes de bloquear
             sys.stdout.flush()
             sys.stderr.flush()
             
-            # Ejecutar el servidor en el loop
-            loop.run_until_complete(server.serve())
+            # Ejecutar el servidor en el loop con manejo de errores explicito
+            try:
+                logger.info("[UVICORN] Llamando a loop.run_until_complete(server.serve())...")
+                loop.run_until_complete(server.serve())
+                logger.info("[UVICORN] server.serve() completo (servidor detenido)")
+            except Exception as e:
+                logger.error(f"[UVICORN] ERROR en server.serve(): {e}", exc_info=True)
+                raise
             
         except KeyboardInterrupt:
             logger.info("[UVICORN] Servidor interrumpido por usuario")
+        except Exception as e:
+            logger.error(f"[UVICORN] ERROR en event loop: {e}", exc_info=True)
+            raise
         finally:
             logger.info("[UVICORN] Cerrando event loop...")
-            loop.close()
+            if not loop.is_closed():
+                loop.close()
+                logger.info("[UVICORN] Event loop cerrado")
         
         logger.info("[SHUTDOWN] Servidor detenido correctamente")
     except Exception as e:
