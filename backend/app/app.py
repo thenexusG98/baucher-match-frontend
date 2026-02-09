@@ -22,4 +22,15 @@ app.add_middleware(
 
 app.include_router(transacciones_router, prefix="/api/v1", tags=["Transacciones"])
 
+# Endpoint de health en la raiz para debugging
+@app.get("/")
+async def root():
+    """Endpoint raiz - confirma que el servidor esta funcionando"""
+    return {"message": "Backend FastAPI funcionando", "version": "1.0.0"}
+
+@app.get("/health")
+async def health_root():
+    """Endpoint de health en la raiz (sin prefijo)"""
+    return {"status": "ok", "message": "Backend activo", "service": "baucher-match-backend"}
+
 #   & 'c:\Users\TheNex\anaconda3\envs\bautcher-match-env\python.exe' 'c:\Users\TheNex\.vscode\extensions\ms-python.debugpy-2025.6.0-win32-x64\bundled\libs\debugpy\launcher' '55071' '--' '-m' 'uvicorn' 'app.app:app' '--reload' 

@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
  */
 export class BackendService {
   private readonly baseUrl = 'http://127.0.0.1:8000';
-  private readonly healthEndpoint = `${this.baseUrl}/api/v1/health`;
+  private readonly healthEndpoint = `${this.baseUrl}/health`; // Cambiado de /api/v1/health a /health
   
   /**
    * Iniciar el proceso del backend
@@ -55,6 +55,7 @@ export class BackendService {
    */
   async waitForReady(maxAttempts: number = 40, delayMs: number = 1000): Promise<boolean> {
     console.log('[DEBUG] Esperando que el backend este listo...');
+    console.log('[DEBUG] Health endpoint:', this.healthEndpoint);
     
     // Dar tiempo inicial para que uvicorn inicie (especialmente en produccion)
     console.log('[DEBUG] Esperando 6 segundos para que uvicorn inicie...');
@@ -62,20 +63,32 @@ export class BackendService {
     
     for (let i = 0; i < maxAttempts; i++) {
       try {
+        console.log(`[DEBUG] Intento ${i + 1}/${maxAttempts} - Haciendo fetch a ${this.healthEndpoint}`);
+        
         const response = await fetch(this.healthEndpoint, {
           method: 'GET',
           signal: AbortSignal.timeout(3000), // 3 segundos de timeout
+          mode: 'cors', // Explicito CORS
+          headers: {
+            'Accept': 'application/json',
+          },
         });
+        
+        console.log(`[DEBUG] Response recibida - Status: ${response.status}, OK: ${response.ok}`);
+        console.log(`[DEBUG] Response headers:`, Object.fromEntries(response.headers.entries()));
         
         if (response.ok) {
           const data = await response.json();
           console.log('[SUCCESS] Backend esta listo y respondiendo:', data);
           return true;
         } else {
-          console.log(`[DEBUG] Response status: ${response.status} ${response.statusText}`);
+          const text = await response.text();
+          console.log(`[DEBUG] Response no OK - Status: ${response.status}, Body:`, text);
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[DEBUG] Error en fetch:`, error);
+        
         // Si es el ultimo intento, mostrar el error completo
         if (i === maxAttempts - 1) {
           console.error('[ERROR] Backend no respondio despues de', maxAttempts, 'intentos');
