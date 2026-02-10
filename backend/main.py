@@ -198,14 +198,20 @@ if __name__ == "__main__":
             """Maneja una conexion de cliente HTTP"""
             try:
                 # Leer request HTTP
-                data = await reader.read(4096)
+                data = await reader.read(8192)  # Aumentar buffer para archivos grandes
                 if not data:
                     return
                 
-                # Parsear request HTTP
-                request_text = data.decode('utf-8')
+                # Parsear request HTTP con manejo robusto de encoding
+                try:
+                    request_text = data.decode('utf-8')
+                except UnicodeDecodeError:
+                    # Intentar con latin-1 que acepta todos los bytes
+                    request_text = data.decode('latin-1')
+                    logger.warning("[UVICORN] Request contiene caracteres no-UTF8, usando latin-1")
+                
                 lines = request_text.split('\r\n')
-                request_line = lines[0]
+                request_line = lines[0] if lines else ""
                 
                 parts = request_line.split(' ')
                 if len(parts) >= 2:
@@ -216,8 +222,11 @@ if __name__ == "__main__":
                     headers = {}
                     for line in lines[1:]:
                         if ':' in line:
-                            key, value = line.split(':', 1)
-                            headers[key.strip().lower()] = value.strip()
+                            try:
+                                key, value = line.split(':', 1)
+                                headers[key.strip().lower()] = value.strip()
+                            except Exception:
+                                continue  # Ignorar headers mal formados
                     
                     # Preparar scope ASGI
                     scope = {
@@ -281,21 +290,37 @@ if __name__ == "__main__":
                     writer.write(full_body)
                     await writer.drain()
                     
+            except UnicodeDecodeError as ude:
+                logger.error(f"[UVICORN] Error de encoding en request: {ude}", exc_info=True)
+                # Enviar error 400 Bad Request
+                try:
+                    error_body = b'{"detail":"Request encoding error - please check filename"}'
+                    error_response = f"HTTP/1.1 400 Bad Request\r\n"
+                    error_response += "Content-Type: application/json\r\n"
+                    error_response += "Access-Control-Allow-Origin: *\r\n"
+                    error_response += f"Content-Length: {len(error_body)}\r\n"
+                    error_response += "\r\n"
+                    writer.write(error_response.encode('utf-8'))
+                    writer.write(error_body)
+                    await writer.drain()
+                except Exception as send_err:
+                    logger.error(f"[UVICORN] Error enviando respuesta de error: {send_err}")
             except Exception as e:
                 logger.error(f"[UVICORN] Error manejando cliente: {e}", exc_info=True)
                 # Enviar error 500
                 try:
-                    error_body = b'{"detail":"Internal Server Error"}'
+                    error_detail = str(e).replace('"', '\\"')[:200]  # Limitar longitud
+                    error_body = f'{{"detail":"Internal Server Error: {error_detail}"}}'.encode('utf-8')
                     error_response = f"HTTP/1.1 500 Internal Server Error\r\n"
                     error_response += "Content-Type: application/json\r\n"
                     error_response += "Access-Control-Allow-Origin: *\r\n"
                     error_response += f"Content-Length: {len(error_body)}\r\n"
                     error_response += "\r\n"
-                    writer.write(error_response.encode())
+                    writer.write(error_response.encode('utf-8'))
                     writer.write(error_body)
                     await writer.drain()
-                except:
-                    pass
+                except Exception as send_err:
+                    logger.error(f"[UVICORN] Error enviando respuesta de error: {send_err}")
             finally:
                 try:
                     writer.close()
