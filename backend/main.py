@@ -197,36 +197,68 @@ if __name__ == "__main__":
         async def handle_client(reader, writer):
             """Maneja una conexion de cliente HTTP"""
             try:
-                # Leer request HTTP
-                data = await reader.read(8192)  # Aumentar buffer para archivos grandes
-                if not data:
-                    return
+                # Leer headers HTTP primero
+                headers_data = b''
+                while True:
+                    chunk = await reader.read(1024)
+                    if not chunk:
+                        return
+                    headers_data += chunk
+                    # Buscar el final de los headers (doble CRLF)
+                    if b'\r\n\r\n' in headers_data:
+                        break
+                    if len(headers_data) > 16384:  # Límite de seguridad para headers
+                        logger.error("[UVICORN] Headers demasiado grandes")
+                        return
                 
-                # Parsear request HTTP con manejo robusto de encoding
+                # Separar headers y body inicial
+                header_end = headers_data.find(b'\r\n\r\n')
+                headers_bytes = headers_data[:header_end]
+                body_initial = headers_data[header_end + 4:]
+                
+                # Parsear headers con manejo robusto de encoding
                 try:
-                    request_text = data.decode('utf-8')
+                    headers_text = headers_bytes.decode('utf-8')
                 except UnicodeDecodeError:
-                    # Intentar con latin-1 que acepta todos los bytes
-                    request_text = data.decode('latin-1')
+                    headers_text = headers_bytes.decode('latin-1')
                     logger.warning("[UVICORN] Request contiene caracteres no-UTF8, usando latin-1")
                 
-                lines = request_text.split('\r\n')
+                lines = headers_text.split('\r\n')
                 request_line = lines[0] if lines else ""
                 
                 parts = request_line.split(' ')
-                if len(parts) >= 2:
-                    method = parts[0]
-                    path = parts[1]
+                if len(parts) < 2:
+                    logger.error(f"[UVICORN] Request line inválida: {request_line}")
+                    return
                     
-                    # Parsear headers
-                    headers = {}
-                    for line in lines[1:]:
-                        if ':' in line:
-                            try:
-                                key, value = line.split(':', 1)
-                                headers[key.strip().lower()] = value.strip()
-                            except Exception:
-                                continue  # Ignorar headers mal formados
+                method = parts[0]
+                path = parts[1]
+                
+                # Parsear headers
+                headers_dict = {}
+                for line in lines[1:]:
+                    if ':' in line:
+                        try:
+                            key, value = line.split(':', 1)
+                            headers_dict[key.strip().lower()] = value.strip()
+                        except Exception:
+                            continue
+                
+                # Leer body completo si existe Content-Length
+                body_data = body_initial
+                content_length = int(headers_dict.get('content-length', 0))
+                if content_length > 0:
+                    remaining = content_length - len(body_initial)
+                    if remaining > 0:
+                        logger.info(f"[UVICORN] Leyendo body: {content_length} bytes ({len(body_initial)} ya leídos, {remaining} restantes)")
+                        while remaining > 0:
+                            chunk = await reader.read(min(remaining, 8192))
+                            if not chunk:
+                                break
+                            body_data += chunk
+                            remaining -= len(chunk)
+                        logger.info(f"[UVICORN] Body completo leído: {len(body_data)} bytes")
+                        logger.info(f"[UVICORN] Body completo leído: {len(body_data)} bytes")
                     
                     # Preparar scope ASGI
                     scope = {
@@ -238,19 +270,24 @@ if __name__ == "__main__":
                         'path': path,
                         'query_string': b'',
                         'root_path': '',
-                        'headers': [(k.encode(), v.encode()) for k, v in headers.items()],
+                        'headers': [(k.encode('latin-1'), v.encode('latin-1')) for k, v in headers_dict.items()],
                         'server': ('127.0.0.1', 8000),
                         'client': writer.get_extra_info('peername', ('127.0.0.1', 0)),
                     }
                     
-                    # Preparar receive/send
+                    # Preparar receive/send para ASGI
+                    body_sent = False
                     response_started = False
                     response_body = []
                     response_status = 200
                     response_headers = []
                     
                     async def receive():
-                        return {'type': 'http.request', 'body': b''}
+                        nonlocal body_sent
+                        if not body_sent:
+                            body_sent = True
+                            return {'type': 'http.request', 'body': body_data, 'more_body': False}
+                        return {'type': 'http.request', 'body': b'', 'more_body': False}
                     
                     async def send(message):
                         nonlocal response_started, response_body, response_status, response_headers
@@ -264,6 +301,7 @@ if __name__ == "__main__":
                                 response_body.append(body)
                     
                     # Llamar a FastAPI via ASGI
+                    logger.info(f"[UVICORN] Procesando {method} {path}")
                     await app(scope, receive, send)
                     
                     # Construir response HTTP
@@ -273,9 +311,9 @@ if __name__ == "__main__":
                     # Agregar headers de la app
                     has_cors = False
                     for header_name, header_value in response_headers:
-                        header_line = f"{header_name.decode()}: {header_value.decode()}\r\n"
+                        header_line = f"{header_name.decode('latin-1')}: {header_value.decode('latin-1')}\r\n"
                         http_response += header_line
-                        if header_name.decode().lower() == 'access-control-allow-origin':
+                        if header_name.decode('latin-1').lower() == 'access-control-allow-origin':
                             has_cors = True
                     
                     # Agregar CORS si no existe
@@ -286,9 +324,10 @@ if __name__ == "__main__":
                     http_response += "\r\n"
                     
                     # Enviar response
-                    writer.write(http_response.encode())
+                    writer.write(http_response.encode('latin-1'))
                     writer.write(full_body)
                     await writer.drain()
+                    logger.info(f"[UVICORN] Response enviada: {response_status}, {len(full_body)} bytes")
                     
             except UnicodeDecodeError as ude:
                 logger.error(f"[UVICORN] Error de encoding en request: {ude}", exc_info=True)
@@ -331,6 +370,8 @@ if __name__ == "__main__":
         async def serve_forever():
             """Loop principal del servidor"""
             logger.info("[UVICORN] Entrando en loop principal de aceptacion de conexiones...")
+            tasks = set()  # Mantener referencias a las tareas
+            
             while True:
                 try:
                     # Aceptar conexion de forma asincrona
@@ -340,8 +381,13 @@ if __name__ == "__main__":
                     # Crear reader/writer asyncio
                     reader, writer = await asyncio.open_connection(sock=client_sock)
                     
-                    # Manejar en background
-                    asyncio.create_task(handle_client(reader, writer))
+                    # Crear tarea y mantener referencia
+                    task = asyncio.create_task(handle_client(reader, writer))
+                    tasks.add(task)
+                    
+                    # Callback para limpiar tareas completadas
+                    task.add_done_callback(lambda t: tasks.discard(t))
+                    
                 except Exception as e:
                     logger.error(f"[UVICORN] Error en loop principal: {e}", exc_info=True)
         
