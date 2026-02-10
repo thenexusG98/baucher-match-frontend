@@ -66,6 +66,7 @@ export default function UploadStatement({
     formData.append("file", file);
 
     try {
+      console.log("[UPLOAD] Iniciando petición POST a /download-csv");
       const response = await fetch(
         "http://localhost:8000/api/v1/download-csv",
         {
@@ -74,10 +75,22 @@ export default function UploadStatement({
         }
       );
 
+      console.log("[UPLOAD] Response recibido:", {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
       if (!response.ok) throw new Error("Error al procesar el archivo.");
 
       // 🟢 El backend devuelve el archivo directamente
+      console.log("[UPLOAD] Convirtiendo response a blob...");
       const blob = await response.blob();
+      console.log("[UPLOAD] Blob recibido:", {
+        size: blob.size,
+        type: blob.type
+      });
 
       // Obtener el tiempo de ejecución del header
       //const executionTime = parseFloat(

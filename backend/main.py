@@ -314,21 +314,31 @@ if __name__ == "__main__":
                 
                 async def send(message):
                     nonlocal response_started, response_body, response_status, response_headers
+                    msg_type = message.get('type', 'unknown')
+                    logger.info(f"[UVICORN] ASGI send() llamado con tipo: {msg_type}")
+                    
                     if message['type'] == 'http.response.start':
                         response_status = message['status']
                         response_headers = message.get('headers', [])
                         response_started = True
+                        logger.info(f"[UVICORN] Response iniciado - Status: {response_status}, Headers: {len(response_headers)}")
                     elif message['type'] == 'http.response.body':
                         body = message.get('body', b'')
+                        more_body = message.get('more_body', False)
                         if body:
                             response_body.append(body)
+                            logger.info(f"[UVICORN] Body chunk recibido: {len(body)} bytes, more_body={more_body}")
+                        else:
+                            logger.info(f"[UVICORN] Body chunk vacío, more_body={more_body}")
                 
                 # Llamar a FastAPI via ASGI
                 logger.info(f"[UVICORN] Procesando {method} {path}")
                 await app(scope, receive, send)
+                logger.info(f"[UVICORN] FastAPI completado. Body chunks: {len(response_body)}, Total bytes: {sum(len(chunk) for chunk in response_body)}")
                 
                 # Construir response HTTP
                 full_body = b''.join(response_body)
+                logger.info(f"[UVICORN] Body completo ensamblado: {len(full_body)} bytes")
                 http_response = f"HTTP/1.1 {response_status} OK\r\n"
                 
                 # Agregar headers de la app
