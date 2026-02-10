@@ -2,14 +2,18 @@
 PDF Text Extractor con fallback automático
 Intenta usar pdftotext, si no está disponible usa PyMuPDF
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import pdftotext
     USE_PDFTOTEXT = True
+    logger.info("[PDF-EXTRACTOR] Usando pdftotext como backend principal")
 except ImportError:
     import fitz  # PyMuPDF
     USE_PDFTOTEXT = False
-    print("[INFO] pdftotext no disponible, usando PyMuPDF como alternativa")
+    logger.info("[PDF-EXTRACTOR] pdftotext no disponible, usando PyMuPDF como alternativa")
 
 
 class PDF:
@@ -24,31 +28,43 @@ class PDF:
             file: file object opened in binary mode
             physical: bool - usar layout físico (mantiene posiciones)
         """
+        logger.info(f"[PDF-EXTRACTOR] Inicializando PDF (physical={physical}, backend={'pdftotext' if USE_PDFTOTEXT else 'PyMuPDF'})")
         self.physical = physical
         self.pages = []
         
-        if USE_PDFTOTEXT:
-            # Usar pdftotext original
-            pdf_obj = pdftotext.PDF(file, physical=physical)
-            self.pages = [page for page in pdf_obj]
-        else:
-            # Usar PyMuPDF como alternativa
-            pdf_doc = fitz.open(stream=file.read(), filetype="pdf")
-            
-            for page_num in range(len(pdf_doc)):
-                page = pdf_doc[page_num]
+        try:
+            if USE_PDFTOTEXT:
+                # Usar pdftotext original
+                logger.info("[PDF-EXTRACTOR] Usando pdftotext para extraer texto...")
+                pdf_obj = pdftotext.PDF(file, physical=physical)
+                self.pages = [page for page in pdf_obj]
+                logger.info(f"[PDF-EXTRACTOR] pdftotext extrajo {len(self.pages)} páginas")
+            else:
+                # Usar PyMuPDF como alternativa
+                logger.info("[PDF-EXTRACTOR] Usando PyMuPDF para extraer texto...")
+                pdf_doc = fitz.open(stream=file.read(), filetype="pdf")
+                logger.info(f"[PDF-EXTRACTOR] PyMuPDF abrió documento con {len(pdf_doc)} páginas")
                 
-                if physical:
-                    # Extraer texto manteniendo layout físico (similar a pdftotext physical=True)
-                    # Usar "blocks" para mantener posiciones relativas
-                    text = page.get_text("text", sort=True)
-                else:
-                    # Extraer texto simple
-                    text = page.get_text()
+                for page_num in range(len(pdf_doc)):
+                    page = pdf_doc[page_num]
+                    
+                    if physical:
+                        # Extraer texto manteniendo layout físico (similar a pdftotext physical=True)
+                        # Usar "blocks" para mantener posiciones relativas
+                        text = page.get_text("text", sort=True)
+                        logger.info(f"[PDF-EXTRACTOR] Página {page_num + 1} extraída con layout físico ({len(text)} caracteres)")
+                    else:
+                        # Extraer texto simple
+                        text = page.get_text()
+                        logger.info(f"[PDF-EXTRACTOR] Página {page_num + 1} extraída modo simple ({len(text)} caracteres)")
+                    
+                    self.pages.append(text)
                 
-                self.pages.append(text)
-            
-            pdf_doc.close()
+                pdf_doc.close()
+                logger.info(f"[PDF-EXTRACTOR] PyMuPDF completó extracción de {len(self.pages)} páginas")
+        except Exception as e:
+            logger.error(f"[PDF-EXTRACTOR] Error durante extracción: {str(e)}", exc_info=True)
+            raise
     
     def __iter__(self):
         """Permite iterar sobre las páginas"""

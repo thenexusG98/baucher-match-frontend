@@ -10,7 +10,10 @@ import time
 import json
 import csv
 import re
+import logging
+import traceback
 
+logger = logging.getLogger(__name__)
 router  = APIRouter()
 
 def cleanup_files(*file_paths):
@@ -70,43 +73,61 @@ async def upload_pdf(file: UploadFile = File(...), background_tasks: BackgroundT
 
 @router.post("/download-csv")
 async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
-
+    logger.info(f"[UPLOAD-CSV] Iniciando procesamiento de archivo: {file.filename}")
+    
     temp_path = f"temp/{file.filename}"
     os.makedirs("temp", exist_ok=True)
+    logger.info(f"[UPLOAD-CSV] Directorio temporal creado: temp/")
 
     if not file.filename.endswith(".pdf"):
+        logger.error(f"[UPLOAD-CSV] Archivo rechazado - no es PDF: {file.filename}")
         raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF.")
     
     try:
+        logger.info(f"[UPLOAD-CSV] Guardando archivo en: {temp_path}")
         with open(temp_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
+        
+        file_size = os.path.getsize(temp_path)
+        logger.info(f"[UPLOAD-CSV] Archivo guardado correctamente. Tamaño: {file_size} bytes")
 
         start_time = time.time()
+        logger.info(f"[UPLOAD-CSV] Llamando a process_pdf_file()...")
         movimientos_json_path = process_pdf_file(temp_path)
+        logger.info(f"[UPLOAD-CSV] process_pdf_file() completado. JSON generado: {movimientos_json_path}")
         execution_time = time.time() - start_time
+        logger.info(f"[UPLOAD-CSV] Tiempo de procesamiento PDF: {execution_time:.2f}s")
 
         # Read JSON data
+        logger.info(f"[UPLOAD-CSV] Leyendo datos JSON desde: {movimientos_json_path}")
         with open(movimientos_json_path, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
+        logger.info(f"[UPLOAD-CSV] JSON cargado. Total de registros: {len(data) if isinstance(data, list) else 'N/A'}")
 
         # Prepare CSV path
         file_name = temp_path[8:-4].strip().replace(" ", "_")
         csv_path = f"temp/{file_name}.csv"
+        logger.info(f"[UPLOAD-CSV] Ruta CSV preparada: {csv_path}")
 
         total_abonos = sum(float(item.get('ABONOS', 0)) for item in data if isinstance(item, dict))
-        print(f"Total ABONOS: ${total_abonos}")
+        logger.info(f"[UPLOAD-CSV] Total ABONOS calculado: ${total_abonos}")
         
         # Write CSV
+        logger.info(f"[UPLOAD-CSV] Escribiendo archivo CSV...")
         if isinstance(data, list) and data:
             keys = data[0].keys()
+            logger.info(f"[UPLOAD-CSV] Columnas CSV: {list(keys)}")
             with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
                 writer = csv.DictWriter(csv_file, fieldnames=keys)
                 writer.writeheader()
                 writer.writerows(data)
+            logger.info(f"[UPLOAD-CSV] CSV escrito exitosamente con {len(data)} registros")
         else:
+            logger.error(f"[UPLOAD-CSV] Datos JSON inválidos. Tipo: {type(data)}, Contenido: {data}")
             raise HTTPException(status_code=422, detail="El archivo JSON no contiene datos válidos para CSV.")
 
         # Programar eliminación de archivos temporales
+        logger.info(f"[UPLOAD-CSV] Programando limpieza de archivos temporales")
         background_tasks.add_task(cleanup_files, temp_path, movimientos_json_path, csv_path)
 
         response = FileResponse(
@@ -115,13 +136,18 @@ async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundT
             media_type="text/csv"
         )
         po = json.dumps({"execution_time": execution_time, "total_count": len(data), "income_month": total_abonos})
+        logger.info(f"[UPLOAD-CSV] Response metadata: {po}")
 
         response.headers["X-json"] = po
+        logger.info(f"[UPLOAD-CSV] Procesamiento completado exitosamente")
         return response
     
     except ValueError as ve:
+        logger.error(f"[UPLOAD-CSV] ValueError: {ve}", exc_info=True)
         raise HTTPException(status_code=422, detail=f"Error al procesar el PDF: {ve}")
     except Exception as e:
+        logger.error(f"[UPLOAD-CSV] Error inesperado: {str(e)}", exc_info=True)
+        logger.error(f"[UPLOAD-CSV] Traceback completo:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
