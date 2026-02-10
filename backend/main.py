@@ -197,24 +197,41 @@ if __name__ == "__main__":
         async def handle_client(reader, writer):
             """Maneja una conexion de cliente HTTP"""
             try:
-                # Leer headers HTTP primero
+                # Leer headers HTTP primero con timeout
                 headers_data = b''
-                while True:
-                    chunk = await reader.read(1024)
-                    if not chunk:
+                attempts = 0
+                max_attempts = 20  # 20 intentos * 1KB = máx 20KB de headers
+                
+                while attempts < max_attempts:
+                    try:
+                        chunk = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+                        if not chunk:
+                            if not headers_data:
+                                logger.warning("[UVICORN] Conexión cerrada antes de enviar datos")
+                                return
+                            break
+                        headers_data += chunk
+                        attempts += 1
+                        
+                        # Buscar el final de los headers (doble CRLF)
+                        if b'\r\n\r\n' in headers_data:
+                            break
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[UVICORN] Timeout leyendo headers después de {len(headers_data)} bytes")
+                        if headers_data:
+                            break  # Intentar procesar lo que tenemos
                         return
-                    headers_data += chunk
-                    # Buscar el final de los headers (doble CRLF)
-                    if b'\r\n\r\n' in headers_data:
-                        break
-                    if len(headers_data) > 16384:  # Límite de seguridad para headers
-                        logger.error("[UVICORN] Headers demasiado grandes")
-                        return
+                
+                if not headers_data or b'\r\n\r\n' not in headers_data:
+                    logger.error(f"[UVICORN] Headers incompletos o vacíos. Recibido: {len(headers_data)} bytes")
+                    return
                 
                 # Separar headers y body inicial
                 header_end = headers_data.find(b'\r\n\r\n')
                 headers_bytes = headers_data[:header_end]
                 body_initial = headers_data[header_end + 4:]
+                
+                logger.info(f"[UVICORN] Headers recibidos: {len(headers_bytes)} bytes, body inicial: {len(body_initial)} bytes")
                 
                 # Parsear headers con manejo robusto de encoding
                 try:
@@ -250,84 +267,90 @@ if __name__ == "__main__":
                 if content_length > 0:
                     remaining = content_length - len(body_initial)
                     if remaining > 0:
-                        logger.info(f"[UVICORN] Leyendo body: {content_length} bytes ({len(body_initial)} ya leídos, {remaining} restantes)")
+                        logger.info(f"[UVICORN] Leyendo body: {content_length} bytes totales ({len(body_initial)} ya leídos, {remaining} restantes)")
                         while remaining > 0:
-                            chunk = await reader.read(min(remaining, 8192))
-                            if not chunk:
+                            try:
+                                chunk = await asyncio.wait_for(reader.read(min(remaining, 8192)), timeout=30.0)
+                                if not chunk:
+                                    logger.warning(f"[UVICORN] Conexión cerrada, faltan {remaining} bytes")
+                                    break
+                                body_data += chunk
+                                remaining -= len(chunk)
+                            except asyncio.TimeoutError:
+                                logger.error(f"[UVICORN] Timeout leyendo body, faltan {remaining} bytes")
                                 break
-                            body_data += chunk
-                            remaining -= len(chunk)
                         logger.info(f"[UVICORN] Body completo leído: {len(body_data)} bytes")
-                        logger.info(f"[UVICORN] Body completo leído: {len(body_data)} bytes")
+                else:
+                    logger.info(f"[UVICORN] Request sin body (Content-Length: 0)")
                     
-                    # Preparar scope ASGI
-                    scope = {
-                        'type': 'http',
-                        'asgi': {'version': '3.0'},
-                        'http_version': '1.1',
-                        'method': method,
-                        'scheme': 'http',
-                        'path': path,
-                        'query_string': b'',
-                        'root_path': '',
-                        'headers': [(k.encode('latin-1'), v.encode('latin-1')) for k, v in headers_dict.items()],
-                        'server': ('127.0.0.1', 8000),
-                        'client': writer.get_extra_info('peername', ('127.0.0.1', 0)),
-                    }
-                    
-                    # Preparar receive/send para ASGI
-                    body_sent = False
-                    response_started = False
-                    response_body = []
-                    response_status = 200
-                    response_headers = []
-                    
-                    async def receive():
-                        nonlocal body_sent
-                        if not body_sent:
-                            body_sent = True
-                            return {'type': 'http.request', 'body': body_data, 'more_body': False}
-                        return {'type': 'http.request', 'body': b'', 'more_body': False}
-                    
-                    async def send(message):
-                        nonlocal response_started, response_body, response_status, response_headers
-                        if message['type'] == 'http.response.start':
-                            response_status = message['status']
-                            response_headers = message.get('headers', [])
-                            response_started = True
-                        elif message['type'] == 'http.response.body':
-                            body = message.get('body', b'')
-                            if body:
-                                response_body.append(body)
-                    
-                    # Llamar a FastAPI via ASGI
-                    logger.info(f"[UVICORN] Procesando {method} {path}")
-                    await app(scope, receive, send)
-                    
-                    # Construir response HTTP
-                    full_body = b''.join(response_body)
-                    http_response = f"HTTP/1.1 {response_status} OK\r\n"
-                    
-                    # Agregar headers de la app
-                    has_cors = False
-                    for header_name, header_value in response_headers:
-                        header_line = f"{header_name.decode('latin-1')}: {header_value.decode('latin-1')}\r\n"
-                        http_response += header_line
-                        if header_name.decode('latin-1').lower() == 'access-control-allow-origin':
-                            has_cors = True
-                    
-                    # Agregar CORS si no existe
-                    if not has_cors:
-                        http_response += "Access-Control-Allow-Origin: *\r\n"
-                    
-                    http_response += f"Content-Length: {len(full_body)}\r\n"
-                    http_response += "\r\n"
-                    
-                    # Enviar response
-                    writer.write(http_response.encode('latin-1'))
-                    writer.write(full_body)
-                    await writer.drain()
-                    logger.info(f"[UVICORN] Response enviada: {response_status}, {len(full_body)} bytes")
+                # Preparar scope ASGI
+                scope = {
+                    'type': 'http',
+                    'asgi': {'version': '3.0'},
+                    'http_version': '1.1',
+                    'method': method,
+                    'scheme': 'http',
+                    'path': path,
+                    'query_string': b'',
+                    'root_path': '',
+                    'headers': [(k.encode('latin-1'), v.encode('latin-1')) for k, v in headers_dict.items()],
+                    'server': ('127.0.0.1', 8000),
+                    'client': writer.get_extra_info('peername', ('127.0.0.1', 0)),
+                }
+                
+                # Preparar receive/send para ASGI
+                body_sent = False
+                response_started = False
+                response_body = []
+                response_status = 200
+                response_headers = []
+                
+                async def receive():
+                    nonlocal body_sent
+                    if not body_sent:
+                        body_sent = True
+                        return {'type': 'http.request', 'body': body_data, 'more_body': False}
+                    return {'type': 'http.request', 'body': b'', 'more_body': False}
+                
+                async def send(message):
+                    nonlocal response_started, response_body, response_status, response_headers
+                    if message['type'] == 'http.response.start':
+                        response_status = message['status']
+                        response_headers = message.get('headers', [])
+                        response_started = True
+                    elif message['type'] == 'http.response.body':
+                        body = message.get('body', b'')
+                        if body:
+                            response_body.append(body)
+                
+                # Llamar a FastAPI via ASGI
+                logger.info(f"[UVICORN] Procesando {method} {path}")
+                await app(scope, receive, send)
+                
+                # Construir response HTTP
+                full_body = b''.join(response_body)
+                http_response = f"HTTP/1.1 {response_status} OK\r\n"
+                
+                # Agregar headers de la app
+                has_cors = False
+                for header_name, header_value in response_headers:
+                    header_line = f"{header_name.decode('latin-1')}: {header_value.decode('latin-1')}\r\n"
+                    http_response += header_line
+                    if header_name.decode('latin-1').lower() == 'access-control-allow-origin':
+                        has_cors = True
+                
+                # Agregar CORS si no existe
+                if not has_cors:
+                    http_response += "Access-Control-Allow-Origin: *\r\n"
+                
+                http_response += f"Content-Length: {len(full_body)}\r\n"
+                http_response += "\r\n"
+                
+                # Enviar response
+                writer.write(http_response.encode('latin-1'))
+                writer.write(full_body)
+                await writer.drain()
+                logger.info(f"[UVICORN] Response enviada: {response_status}, {len(full_body)} bytes")
                     
             except UnicodeDecodeError as ude:
                 logger.error(f"[UVICORN] Error de encoding en request: {ude}", exc_info=True)
