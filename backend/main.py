@@ -249,7 +249,15 @@ if __name__ == "__main__":
                     return
                     
                 method = parts[0]
-                path = parts[1]
+                full_path = parts[1]
+                
+                # Separar path y query string
+                if '?' in full_path:
+                    path, query_string = full_path.split('?', 1)
+                    query_string_bytes = query_string.encode('latin-1')
+                else:
+                    path = full_path
+                    query_string_bytes = b''
                 
                 # Parsear headers
                 headers_dict = {}
@@ -291,7 +299,7 @@ if __name__ == "__main__":
                     'method': method,
                     'scheme': 'http',
                     'path': path,
-                    'query_string': b'',
+                    'query_string': query_string_bytes,
                     'root_path': '',
                     'headers': [(k.encode('latin-1'), v.encode('latin-1')) for k, v in headers_dict.items()],
                     'server': ('127.0.0.1', 8000),
@@ -339,21 +347,54 @@ if __name__ == "__main__":
                 # Construir response HTTP
                 full_body = b''.join(response_body)
                 logger.info(f"[UVICORN] Body completo ensamblado: {len(full_body)} bytes")
-                http_response = f"HTTP/1.1 {response_status} OK\r\n"
                 
-                # Agregar headers de la app
+                # Usar el status text correcto
+                status_texts = {200: 'OK', 201: 'Created', 204: 'No Content', 307: 'Temporary Redirect',
+                                400: 'Bad Request', 404: 'Not Found', 405: 'Method Not Allowed', 
+                                422: 'Unprocessable Entity', 500: 'Internal Server Error'}
+                status_text = status_texts.get(response_status, 'OK')
+                http_response = f"HTTP/1.1 {response_status} {status_text}\r\n"
+                
+                # Agregar headers de la app, rastreando cuáles ya existen
                 has_cors = False
+                has_content_length = False
+                has_cors_expose = False
                 for header_name, header_value in response_headers:
-                    header_line = f"{header_name.decode('latin-1')}: {header_value.decode('latin-1')}\r\n"
+                    name_str = header_name.decode('latin-1').lower()
+                    value_str = header_value.decode('latin-1')
+                    
+                    # Reemplazar content-length del app con el real (por si FileResponse lo calculó antes de streaming)
+                    if name_str == 'content-length':
+                        has_content_length = True
+                        # Usar el tamaño real del body que acumulamos
+                        http_response += f"content-length: {len(full_body)}\r\n"
+                        continue
+                    
+                    header_line = f"{header_name.decode('latin-1')}: {value_str}\r\n"
                     http_response += header_line
-                    if header_name.decode('latin-1').lower() == 'access-control-allow-origin':
+                    
+                    if name_str == 'access-control-allow-origin':
                         has_cors = True
+                    if name_str == 'access-control-expose-headers':
+                        has_cors_expose = True
                 
                 # Agregar CORS si no existe
                 if not has_cors:
                     http_response += "Access-Control-Allow-Origin: *\r\n"
+                    http_response += "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
+                    http_response += "Access-Control-Allow-Headers: *\r\n"
                 
-                http_response += f"Content-Length: {len(full_body)}\r\n"
+                # Agregar expose headers si no existe (necesario para X-json)
+                if not has_cors_expose:
+                    http_response += "Access-Control-Expose-Headers: X-json, X-Json, Content-Disposition\r\n"
+                
+                # Agregar Content-Length si no fue proporcionado por la app
+                if not has_content_length:
+                    http_response += f"Content-Length: {len(full_body)}\r\n"
+                
+                # Siempre cerrar conexión después de enviar (HTTP/1.0 style, más simple)
+                http_response += "Connection: close\r\n"
+                
                 http_response += "\r\n"
                 
                 # Enviar response

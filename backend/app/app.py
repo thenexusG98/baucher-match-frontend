@@ -17,7 +17,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Execution-Time", "X-Total-Count", "X-Json"],
+    expose_headers=["X-Execution-Time", "X-Total-Count", "X-Json", "X-json", "Content-Disposition"],
 )
 
 app.include_router(transacciones_router, prefix="/api/v1", tags=["Transacciones"])
