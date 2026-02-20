@@ -1,5 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi.responses import Response
 from app.utils.utils import pattern_date, phrases_to_ignore, partial_phrases_to_ignore
 from app.utils.pdf_extractor import PDF
 
@@ -36,7 +36,7 @@ async def health_check():
     }
 
 @router.post("/download-pdf")
-async def upload_pdf(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+async def upload_pdf(file: UploadFile = File(...)):
     temp_path = f"temp/{file.filename}"
     os.makedirs("temp", exist_ok=True)
 
@@ -53,17 +53,26 @@ async def upload_pdf(file: UploadFile = File(...), background_tasks: BackgroundT
         
         file_name = temp_path[8:-4].strip().replace(" ", "_")
         
-        # Programar eliminación de archivos temporales
-        background_tasks.add_task(cleanup_files, temp_path, movimientos)
+        # Leer JSON en memoria para evitar async file I/O de FileResponse
+        with open(movimientos, "rb") as json_read:
+            json_content = json_read.read()
         
-        return {
-            "file": FileResponse(
-                movimientos,
-                filename=f"{file_name}.json",
-                media_type="application/json"
-            ),
-            "execution_time": execution_time
-        }
+        # Limpiar archivos temporales de forma sincrónica
+        try:
+            for fpath in [temp_path, movimientos]:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+        except Exception:
+            pass
+        
+        return Response(
+            content=json_content,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_name}.json"',
+                "X-json": json.dumps({"execution_time": execution_time}),
+            }
+        )
     
     except ValueError as ve:
         raise HTTPException(status_code=422, detail=f"Error al procesar el PDF: {ve}")
@@ -72,7 +81,7 @@ async def upload_pdf(file: UploadFile = File(...), background_tasks: BackgroundT
     
 
 @router.post("/download-csv")
-async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+async def upload_csv(file: UploadFile = File(...)):
     logger.info(f"[UPLOAD-CSV] Iniciando procesamiento de archivo: {file.filename}")
     
     temp_path = f"temp/{file.filename}"
@@ -126,20 +135,34 @@ async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundT
             logger.error(f"[UPLOAD-CSV] Datos JSON inválidos. Tipo: {type(data)}, Contenido: {data}")
             raise HTTPException(status_code=422, detail="El archivo JSON no contiene datos válidos para CSV.")
 
-        # Programar eliminación de archivos temporales
-        logger.info(f"[UPLOAD-CSV] Programando limpieza de archivos temporales")
-        background_tasks.add_task(cleanup_files, temp_path, movimientos_json_path, csv_path)
+        # Programar eliminación de archivos temporales DESPUES de leer el CSV
+        logger.info(f"[UPLOAD-CSV] Leyendo CSV en memoria para enviar...")
+        with open(csv_path, "rb") as csv_read:
+            csv_content = csv_read.read()
+        logger.info(f"[UPLOAD-CSV] CSV leido en memoria: {len(csv_content)} bytes")
+        
+        # Ahora sí podemos eliminar los archivos
+        try:
+            for fpath in [temp_path, movimientos_json_path, csv_path]:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+                    logger.info(f"[UPLOAD-CSV] Archivo temporal eliminado: {fpath}")
+        except Exception as cleanup_err:
+            logger.warning(f"[UPLOAD-CSV] Error limpiando temporales: {cleanup_err}")
 
-        response = FileResponse(
-            csv_path,
-            filename=f"{file_name}.csv",
-            media_type="text/csv"
-        )
         po = json.dumps({"execution_time": execution_time, "total_count": len(data), "income_month": total_abonos})
         logger.info(f"[UPLOAD-CSV] Response metadata: {po}")
 
-        response.headers["X-json"] = po
-        logger.info(f"[UPLOAD-CSV] Procesamiento completado exitosamente")
+        # Devolver el CSV directamente como bytes (sin FileResponse que usa async file I/O)
+        response = Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_name}.csv"',
+                "X-json": po,
+            }
+        )
+        logger.info(f"[UPLOAD-CSV] Procesamiento completado exitosamente. Enviando {len(csv_content)} bytes")
         return response
     
     except ValueError as ve:
@@ -156,7 +179,6 @@ async def upload_csv(file: UploadFile = File(...), background_tasks: BackgroundT
 @router.post("/extract-partial-json")
 async def extract_transactions_json(
     file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None,
     output_format: str = Query("json", description="Formato de salida: ndjson o json", regex="^(ndjson|json)$")
 ):
     """
@@ -291,31 +313,41 @@ async def extract_transactions_json(
         # Guardar resultados según formato solicitado
         file_name = temp_path[5:-4].strip().replace(" ", "_")
         if output_format == "json":
-            array_path = f"temp/{file_name}_transactions_array.json"
-            with open(array_path, "w", encoding="utf-8") as jf:
-                json.dump(results, jf, ensure_ascii=False, indent=2)
+            # Generar JSON directamente en memoria
+            json_content = json.dumps(results, ensure_ascii=False, indent=2).encode("utf-8")
             
-            # Programar eliminación de archivos temporales
-            background_tasks.add_task(cleanup_files, temp_path, array_path)
+            # Limpiar archivos temporales
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except Exception:
+                pass
             
-            return FileResponse(
-                array_path,
-                filename=f"{file_name}_transactions.json",
-                media_type="application/json"
+            return Response(
+                content=json_content,
+                media_type="application/json",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{file_name}_transactions.json"',
+                }
             )
         else:
-            ndjson_path = f"temp/{file_name}_transactions.json"
-            with open(ndjson_path, "w", encoding="utf-8") as out_f:
-                for obj in results:
-                    out_f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+            # Generar NDJSON directamente en memoria
+            ndjson_lines = [json.dumps(obj, ensure_ascii=False) for obj in results]
+            ndjson_content = ("\n".join(ndjson_lines) + "\n").encode("utf-8")
             
-            # Programar eliminación de archivos temporales
-            background_tasks.add_task(cleanup_files, temp_path, ndjson_path)
+            # Limpiar archivos temporales
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except Exception:
+                pass
             
-            return FileResponse(
-                ndjson_path,
-                filename=f"{file_name}_transactions.json",
-                media_type="application/x-ndjson"
+            return Response(
+                content=ndjson_content,
+                media_type="application/x-ndjson",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{file_name}_transactions.json"',
+                }
             )
 
     except ValueError as ve:
@@ -327,8 +359,7 @@ async def extract_transactions_json(
 
 @router.post("/extract-partial-csv")
 async def extract_transactions_csv(
-    file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None
+    file: UploadFile = File(...)
 ):
     """
     Extrae transacciones de un PDF de estado de cuenta bancario y retorna un archivo CSV.
@@ -484,16 +515,26 @@ async def extract_transactions_csv(
         
         execution_time = time.time() - start_time
         
-        # Programar eliminación de archivos temporales
-        background_tasks.add_task(cleanup_files, temp_path, csv_path)
+        # Leer CSV en memoria para evitar async file I/O de FileResponse
+        with open(csv_path, "rb") as csv_read:
+            csv_content = csv_read.read()
         
-        response = FileResponse(
-                csv_path,
-                filename=f"{file_name}_transactions.csv",
-                media_type="text/csv"
-            )
-        response.headers["X-Execution-Time"] = str(execution_time)
-        return response
+        # Limpiar archivos temporales de forma sincrónica
+        try:
+            for fpath in [temp_path, csv_path]:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+        except Exception:
+            pass
+        
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_name}_transactions.csv"',
+                "X-Execution-Time": str(execution_time),
+            }
+        )
 
     except ValueError as ve:
         raise HTTPException(status_code=422, detail=f"Error al procesar el PDF: {ve}")
