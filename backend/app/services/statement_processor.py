@@ -25,9 +25,9 @@ def extract_transactions_from_pdf(pdf_name):
             logger.info(f"[EXTRACT-TRANS] PDF cargado. Total de páginas: {total_pages}")
             
             for page_num, page in enumerate(pdf, 1):
-                logger.info(f"[EXTRACT-TRANS] Procesando página {page_num}/{total_pages}")
+                logger.debug(f"[EXTRACT-TRANS] Procesando página {page_num}/{total_pages}")
                 lines = page.split("\n")
-                logger.info(f"[EXTRACT-TRANS] Página {page_num} tiene {len(lines)} líneas")
+                logger.debug(f"[EXTRACT-TRANS] Página {page_num} tiene {len(lines)} líneas")
 
                 for line_num, line in enumerate(lines, 1):
                     line = line.strip() 
@@ -36,12 +36,12 @@ def extract_transactions_from_pdf(pdf_name):
                         continue
 
                     if "FECHA" in line:
-                        logger.info(f"[EXTRACT-TRANS] Encabezado FECHA encontrado en página {page_num}, línea {line_num}")
+                        logger.debug(f"[EXTRACT-TRANS] Encabezado FECHA encontrado en página {page_num}, línea {line_num}")
                         analyze = True
                         continue
 
                     if "TOTAL MOVIMIENTOS ABONOS" in line:
-                        logger.info(f"[EXTRACT-TRANS] TOTAL MOVIMIENTOS encontrado en página {page_num}, línea {line_num}")
+                        logger.debug(f"[EXTRACT-TRANS] TOTAL MOVIMIENTOS encontrado en página {page_num}, línea {line_num}")
                         analyze = True
                         movements = clean_total_movements_line(line)
                         break

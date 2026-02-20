@@ -204,7 +204,7 @@ if __name__ == "__main__":
                 
                 while attempts < max_attempts:
                     try:
-                        chunk = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+                        chunk = await asyncio.wait_for(reader.read(1024), timeout=2.0)
                         if not chunk:
                             if not headers_data:
                                 logger.warning("[UVICORN] Conexión cerrada antes de enviar datos")
@@ -399,19 +399,23 @@ if __name__ == "__main__":
                 
                 # Enviar response en chunks para evitar bloqueo con responses grandes
                 response_bytes = http_response.encode('latin-1')
-                writer.write(response_bytes)
-                await writer.drain()
-                
-                # Enviar body en chunks de 32KB para no saturar el buffer del socket
-                CHUNK_SIZE = 32768
-                offset = 0
-                while offset < len(full_body):
-                    chunk = full_body[offset:offset + CHUNK_SIZE]
-                    writer.write(chunk)
+                try:
+                    writer.write(response_bytes)
                     await writer.drain()
-                    offset += len(chunk)
-                
-                logger.info(f"[UVICORN] Response enviada: {response_status}, {len(full_body)} bytes")
+                    
+                    # Enviar body en chunks de 32KB para no saturar el buffer del socket
+                    CHUNK_SIZE = 32768
+                    offset = 0
+                    while offset < len(full_body):
+                        chunk = full_body[offset:offset + CHUNK_SIZE]
+                        writer.write(chunk)
+                        await writer.drain()
+                        offset += len(chunk)
+                    
+                    logger.info(f"[UVICORN] Response enviada: {response_status}, {len(full_body)} bytes")
+                except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError) as conn_err:
+                    logger.warning(f"[UVICORN] Cliente desconectado antes de recibir respuesta completa: {conn_err}")
+                    return
                     
             except UnicodeDecodeError as ude:
                 logger.error(f"[UVICORN] Error de encoding en request: {ude}", exc_info=True)

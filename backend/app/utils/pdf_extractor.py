@@ -127,7 +127,7 @@ def _extract_with_pdftotext_exe(pdf_file_path, physical=False):
         logger.info(f"[PDF-EXTRACTOR] pdftotext.exe extrajo {len(pages)} páginas exitosamente")
         
         for i, page in enumerate(pages):
-            logger.info(f"[PDF-EXTRACTOR] Página {i+1}: {len(page)} caracteres")
+            logger.debug(f"[PDF-EXTRACTOR] Página {i+1}: {len(page)} caracteres")
         
     except subprocess.TimeoutExpired:
         logger.error("[PDF-EXTRACTOR] pdftotext.exe timeout (60s)")

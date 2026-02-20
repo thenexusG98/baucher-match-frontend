@@ -67,13 +67,20 @@ export default function UploadStatement({
 
     try {
       console.log("[UPLOAD] Iniciando petición POST a /download-csv");
+      // Timeout de 10 minutos para archivos grandes (179+ páginas)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
+      
       const response = await fetch(
         "http://localhost:8000/api/v1/download-csv",
         {
           method: "POST",
           body: formData,
+          signal: controller.signal,
+          keepalive: false,
         }
       );
+      clearTimeout(timeoutId);
 
       console.log("[UPLOAD] Response recibido:", {
         ok: response.ok,
@@ -208,9 +215,13 @@ export default function UploadStatement({
           2
         )} segundos.`
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setMessage("Ocurrió un error al procesar el archivo.");
+      if (err?.name === 'AbortError') {
+        setMessage("El procesamiento excedió el tiempo límite. Intenta con un archivo más pequeño.");
+      } else {
+        setMessage("Ocurrió un error al procesar el archivo.");
+      }
     } finally {
       setLoading(false);
     }
