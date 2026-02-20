@@ -50,10 +50,23 @@ try:
     # Agregar el directorio app
     datas.append(('app', 'app'))
     
+    # Agregar el directorio poppler con pdftotext.exe y DLLs
+    import os
+    poppler_dir = os.path.join(str(backend_dir), 'poppler')
+    if os.path.isdir(poppler_dir):
+        datas.append(('poppler', 'poppler'))
+        print(f"[OK] Directorio poppler encontrado: {poppler_dir}")
+        poppler_files = os.listdir(poppler_dir)
+        print(f"    Archivos: {len(poppler_files)} ({', '.join(f for f in poppler_files if f.endswith('.exe'))})")
+    else:
+        print(f"[WARNING] Directorio poppler NO encontrado: {poppler_dir}")
+        print("    pdftotext.exe no será empaquetado - se usará PyMuPDF como fallback")
+    
     # Hiddenimports adicionales explicitos
     additional_imports = [
         'multipart', 'python_multipart', 'email.mime', 'email.mime.multipart',
-        'email.mime.text', 'click', 'fitz', 'pdftotext',
+        'email.mime.text', 'click', 'fitz',
+        # pdftotext ya no se importa como paquete Python, se usa via subprocess
         # Modulos criticos de uvicorn que a veces PyInstaller no detecta
         'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
         'uvicorn.loops.asyncio', 'uvicorn.loops.uvloop',
@@ -99,6 +112,11 @@ except ImportError as e:
     print(f"[ERROR] Error importando PyInstaller hooks: {e}")
     print("Usando configuracion minima...")
     datas = [('app', 'app')]
+    # Intentar agregar poppler tambien en modo minimo
+    import os as _os
+    if _os.path.isdir(_os.path.join(str(Path.cwd()), 'poppler')):
+        datas.append(('poppler', 'poppler'))
+        print("[OK] poppler agregado en modo minimo")
     binaries = []
     hiddenimports = [
         'uvicorn', 'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
@@ -107,7 +125,7 @@ except ImportError as e:
         'uvicorn.lifespan', 'uvicorn.lifespan.on', 'uvicorn.server',
         'uvicorn.config', 'uvicorn.main', 'fastapi', 'starlette',
         'pydantic', 'pydantic_core', 'anyio', 'h11', 'sniffio',
-        'multipart', 'python_multipart', 'click', 'fitz', 'pdftotext',
+        'multipart', 'python_multipart', 'click', 'fitz',
     ]
 
 print("="*60)

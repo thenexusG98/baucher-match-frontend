@@ -53,10 +53,38 @@ jobs:
           # Crear directorio de librerías para Tauri
           New-Item -ItemType Directory -Force -Path src-tauri\libs | Out-Null
           
-          # Copiar todas las DLLs necesarias
+          # Copiar todas las DLLs necesarias para Tauri
           Copy-Item -Path "poppler\poppler-24.08.0\Library\bin\*.dll" -Destination "src-tauri\libs\" -Force
           
-          Write-Host "`n[OK] Poppler descargado y DLLs copiadas" -ForegroundColor Green
+          # CRITICO: Copiar pdftotext.exe Y DLLs al directorio backend/poppler/
+          # para que PyInstaller las empaquete dentro del ejecutable
+          Write-Host "`nCopiando pdftotext.exe y DLLs a backend\poppler\" -ForegroundColor Cyan
+          New-Item -ItemType Directory -Force -Path backend\poppler | Out-Null
+          
+          # Copiar el ejecutable pdftotext.exe
+          Copy-Item -Path "poppler\poppler-24.08.0\Library\bin\pdftotext.exe" -Destination "backend\poppler\" -Force
+          Write-Host "[OK] pdftotext.exe copiado" -ForegroundColor Green
+          
+          # Copiar TODAS las DLLs que pdftotext.exe necesita
+          Copy-Item -Path "poppler\poppler-24.08.0\Library\bin\*.dll" -Destination "backend\poppler\" -Force
+          Write-Host "[OK] DLLs de Poppler copiadas" -ForegroundColor Green
+          
+          # Verificar que pdftotext.exe funciona
+          Write-Host "`nVerificando pdftotext.exe..." -ForegroundColor Yellow
+          $pdftotext = "backend\poppler\pdftotext.exe"
+          if (Test-Path $pdftotext) {
+              & $pdftotext -v 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor Gray }
+              Write-Host "[OK] pdftotext.exe funcional" -ForegroundColor Green
+          } else {
+              Write-Host "[ERROR] pdftotext.exe no encontrado" -ForegroundColor Red
+              exit 1
+          }
+          
+          # Listar contenido de backend\poppler
+          Write-Host "`nContenido de backend\poppler:" -ForegroundColor Yellow
+          Get-ChildItem "backend\poppler" | Format-Table Name, Length
+          
+          Write-Host "`n[OK] Poppler configurado correctamente" -ForegroundColor Green
 
       - name: Setup Python virtual environment
         shell: powershell
@@ -90,21 +118,8 @@ jobs:
               }
           }
           
-          # Intentar instalar pdftotext (opcional - no falla si no funciona)
-          Write-Host "`nIntentando instalar pdftotext..." -ForegroundColor Yellow
-          try {
-              $ErrorActionPreference = "Continue"
-              & $pipVenv install pdftotext 2>&1 | Out-Null
-              if ($LASTEXITCODE -eq 0) {
-                  Write-Host "[OK] pdftotext instalado" -ForegroundColor Green
-              } else {
-                  Write-Host "[WARNING] pdftotext no disponible - se usara PyMuPDF" -ForegroundColor Yellow
-              }
-          } catch {
-              Write-Host "[WARNING] pdftotext no disponible - se usara PyMuPDF" -ForegroundColor Yellow
-          } finally {
-              $ErrorActionPreference = "Stop"
-          }
+          # pdftotext se usa via pdftotext.exe (Poppler) - no necesita pip install
+          Write-Host "`n[INFO] pdftotext se usara via ejecutable de Poppler (backend\poppler\pdftotext.exe)" -ForegroundColor Cyan
           
           # Instalar PyInstaller
           Write-Host "`nInstalando PyInstaller..." -ForegroundColor Yellow
@@ -129,19 +144,11 @@ jobs:
               }
           }
           
-          # Verificar pdftotext (opcional - no afecta $allOk)
-          try {
-              $ErrorActionPreference = "Continue"
-              $pdftotextResult = & $pythonVenv -c "import pdftotext; print('[OK] pdftotext')" 2>&1
-              if ($LASTEXITCODE -eq 0) {
-                  Write-Host $pdftotextResult -ForegroundColor Green
-              } else {
-                  Write-Host "[WARNING] pdftotext no disponible - el backend usara PyMuPDF" -ForegroundColor Yellow
-              }
-          } catch {
-              Write-Host "[WARNING] pdftotext no disponible - el backend usara PyMuPDF" -ForegroundColor Yellow
-          } finally {
-              $ErrorActionPreference = "Stop"
+          # Verificar que pdftotext.exe existe en backend\poppler\
+          if (Test-Path "backend\poppler\pdftotext.exe") {
+              Write-Host "[OK] pdftotext.exe encontrado en backend\poppler\" -ForegroundColor Green
+          } else {
+              Write-Host "[WARNING] pdftotext.exe no encontrado en backend\poppler\" -ForegroundColor Yellow
           }
           
           # Solo fallar si faltan módulos críticos
