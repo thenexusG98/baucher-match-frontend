@@ -12,6 +12,7 @@ import csv
 import re
 import logging
 import traceback
+import asyncio
 
 logger = logging.getLogger(__name__)
 router  = APIRouter()
@@ -101,8 +102,9 @@ async def upload_csv(file: UploadFile = File(...)):
         logger.info(f"[UPLOAD-CSV] Archivo guardado correctamente. Tamaño: {file_size} bytes")
 
         start_time = time.time()
-        logger.info(f"[UPLOAD-CSV] Llamando a process_pdf_file()...")
-        movimientos_json_path = process_pdf_file(temp_path)
+        logger.info(f"[UPLOAD-CSV] Llamando a process_pdf_file() en thread pool...")
+        loop = asyncio.get_event_loop()
+        movimientos_json_path = await loop.run_in_executor(None, process_pdf_file, temp_path)
         logger.info(f"[UPLOAD-CSV] process_pdf_file() completado. JSON generado: {movimientos_json_path}")
         execution_time = time.time() - start_time
         logger.info(f"[UPLOAD-CSV] Tiempo de procesamiento PDF: {execution_time:.2f}s")

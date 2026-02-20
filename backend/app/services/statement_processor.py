@@ -92,10 +92,11 @@ def process_pdf_file(pdf_path):
             logger.warning(f"[PROCESS-PDF] No se encontraron transacciones en el PDF")
         
         for idx, data in enumerate(extracted_data, 1):
-            logger.info(f"[PROCESS-PDF] Procesando registro {idx}/{len(extracted_data)}: {data[:100]}...")
+            logger.debug(f"[PROCESS-PDF] Procesando registro {idx}/{len(extracted_data)}: {data[:100]}...")
             result = extract_fields(data)
             json_result.append(result)
-            logger.info(f"[PROCESS-PDF] Registro {idx} procesado: {result}")
+            logger.debug(f"[PROCESS-PDF] Registro {idx} procesado: {result}")
+        logger.info(f"[PROCESS-PDF] Todos los {len(extracted_data)} registros procesados exitosamente")
 
         json_file_path = f"{file_name}.json"
         logger.info(f"[PROCESS-PDF] Escribiendo JSON en: {json_file_path}")

@@ -19,19 +19,19 @@ def clean_total_movements_line(line):
     return line.strip()
 
 def extract_fields(text):
-    logger.info(f"[EXTRACT-FIELDS] Procesando texto: {text[:200]}...")
+    logger.debug(f"[EXTRACT-FIELDS] Procesando texto: {text[:200]}...")
     
     try:
         # Extraer fechas
         match_dates = re.findall(r"\d{2}/[A-Z]{3}", text)
         date_oper = match_dates[0] if len(match_dates) > 0 else None
         date_liq = match_dates[1] if len(match_dates) > 1 else None
-        logger.info(f"[EXTRACT-FIELDS] Fechas encontradas: oper={date_oper}, liq={date_liq}")
+        logger.debug(f"[EXTRACT-FIELDS] Fechas encontradas: oper={date_oper}, liq={date_liq}")
 
         # Extraer amounts numéricos
         amounts = re.findall(r"\d+(?:\.\d{2})", text.replace(",", ""))
         amounts_float = list(map(float, amounts))
-        logger.info(f"[EXTRACT-FIELDS] Montos encontrados: {amounts_float}")
+        logger.debug(f"[EXTRACT-FIELDS] Montos encontrados: {amounts_float}")
 
         # Buscar la posición del primer número decimal para cortar la descripción
         first_number = re.search(r"\d+(?:\.\d{2})", text.replace(",", ""))
@@ -50,7 +50,7 @@ def extract_fields(text):
         description = re.sub(r"\s{2,}", " ", description).strip()
         header = "OPER LIQ COD. DESCRIPCIÓN REFERENCIA CARGOS ABONOS OPERACIÓN LIQUIDACIÓN"
         description = description.replace(header, "")
-        logger.info(f"[EXTRACT-FIELDS] Descripción limpia: {description[:100]}...")
+        logger.debug(f"[EXTRACT-FIELDS] Descripción limpia: {description[:100]}...")
         
         charges = abonos = operation = liquidation = 0
         control_number = ""
@@ -118,7 +118,7 @@ def extract_fields(text):
             "LIQUIDACION": liquidation,
         }
         
-        logger.info(f"[EXTRACT-FIELDS] Resultado: {result}")
+        logger.debug(f"[EXTRACT-FIELDS] Resultado: {result}")
         return result
         
     except Exception as e:
