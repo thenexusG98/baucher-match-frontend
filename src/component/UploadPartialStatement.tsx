@@ -143,7 +143,7 @@ export default function UploadPartialStatement({ onFileProcessed }: UploadPartia
             name="file"
             accept=".pdf"
             onChange={handleFileChange}
-            className="text-sm text-gray-700"
+            className="bg-blue-700 hover:bg-blue-800 text-white font-semibold py-2 px-6 rounded-lg transition duration-300 disabled:opacity-50"
           />
           {file && (
             <p className="text-sm text-gray-600 mt-1">
@@ -156,7 +156,7 @@ export default function UploadPartialStatement({ onFileProcessed }: UploadPartia
         <button
           onClick={handleUpload}
           disabled={loading}
-          className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-8 rounded-lg border border-blue-900 shadow-md hover:shadow-lg transition-all duration-200 disabled:bg-gray-400 disabled:text-gray-200 disabled:border-gray-500 disabled:cursor-not-allowed"
+          className="bg-blue-700 hover:bg-blue-800 text-white font-semibold py-2 px-6 rounded-lg transition duration-300 disabled:opacity-50"
         >
           {loading ? "Procesando..." : "Subir y Procesar"}
         </button>

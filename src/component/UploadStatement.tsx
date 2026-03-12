@@ -241,7 +241,7 @@ export default function UploadStatement({
               type="file"
               accept=".pdf"
               onChange={handleFileChange}
-              className="text-sm text-gray-700"
+              className="bg-blue-700 hover:bg-blue-800 text-white font-semibold py-2 px-6 rounded-lg transition duration-300 disabled:opacity-50"
             />
             {file && (
               <p className="text-sm text-gray-600 mt-1">
