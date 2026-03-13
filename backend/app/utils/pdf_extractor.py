@@ -47,7 +47,7 @@ def _find_pdftotext_exe():
         if os.path.isfile(path):
             logger.info(f"[PDF-EXTRACTOR] ✓ Encontrado pdftotext en: {path}")
             return path
-    
+     
     # 3. Buscar en el PATH del sistema
     found = shutil.which(exe_name)
     if found:
