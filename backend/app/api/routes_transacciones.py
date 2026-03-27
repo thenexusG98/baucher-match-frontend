@@ -1,7 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form
 from fastapi.responses import Response
 from app.utils.utils import pattern_date, phrases_to_ignore, partial_phrases_to_ignore
-from app.utils.pdf_extractor import PDF
+from app.utils.pdf_extractor import PDF, PDFTOTEXT_EXE
 
 from ..services.statement_processor import process_pdf_file, extract_transactions_partial_from_pdf
 import shutil
@@ -13,6 +13,46 @@ import re
 import logging
 import traceback
 import asyncio
+import subprocess
+import sys
+import tempfile
+
+
+def _pdftotext_run(pdf_path: str, password: str = "", physical: bool = False) -> subprocess.CompletedProcess:
+    """Ejecuta pdftotext con los argumentos dados y retorna el CompletedProcess."""
+    if not PDFTOTEXT_EXE:
+        raise RuntimeError("pdftotext no está disponible en el sistema.")
+    pdftotext_dir = os.path.dirname(PDFTOTEXT_EXE)
+    env = os.environ.copy()
+    sep = ";" if sys.platform == "win32" else ":"
+    env["PATH"] = pdftotext_dir + sep + env.get("PATH", "")
+    cmd = [PDFTOTEXT_EXE]
+    if password:
+        cmd.extend(["-upw", password])
+    if physical:
+        cmd.append("-layout")
+    cmd.extend(["-enc", "UTF-8", pdf_path, "-"])
+    return subprocess.run(cmd, capture_output=True, timeout=60, env=env)
+
+
+def _is_pdf_locked(pdf_path: str) -> bool:
+    """Devuelve True si el PDF requiere contraseña (pdftotext retorna error con mensaje de password)."""
+    result = _pdftotext_run(pdf_path)
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").lower()
+        if "password" in stderr or "encrypted" in stderr or "incorrect" in stderr:
+            return True
+    return False
+
+
+def _check_pdf_password(pdf_path: str, password: str) -> bool:
+    """Devuelve True si la contraseña es correcta para el PDF protegido."""
+    result = _pdftotext_run(pdf_path, password=password)
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").lower()
+        if "password" in stderr or "incorrect" in stderr:
+            return False
+    return True
 
 logger = logging.getLogger(__name__)
 router  = APIRouter()
@@ -35,6 +75,35 @@ async def health_check():
         "message": "Backend FastAPI está funcionando correctamente",
         "service": "baucher-match-backend"
     }
+
+
+@router.post("/check-pdf-locked")
+async def check_pdf_locked(file: UploadFile = File(...)):
+    """
+    Verifica si un PDF está protegido con contraseña usando pdftotext (Poppler).
+    Retorna {"locked": true/false}.
+    """
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF.")
+
+    content = await file.read()
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        try:
+            locked = _is_pdf_locked(tmp_path)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        return {"locked": locked}
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al verificar el PDF: {str(e)}")
+
 
 @router.post("/download-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
@@ -361,10 +430,12 @@ async def extract_transactions_json(
 
 @router.post("/extract-partial-csv")
 async def extract_transactions_csv(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    password: str = Form(default="")
 ):
     """
     Extrae transacciones de un PDF de estado de cuenta bancario y retorna un archivo CSV.
+    Soporta PDFs protegidos con contraseña mediante el parámetro `password`.
     
     Formato esperado del PDF:
     - Línea 1: Concepto/Descripción
@@ -381,6 +452,17 @@ async def extract_transactions_csv(
         with open(temp_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
+        # Si se proporcionó contraseña, verificar que sea correcta con pdftotext -upw
+        if password:
+            ok = _check_pdf_password(temp_path, password)
+            if not ok:
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+                raise HTTPException(status_code=401, detail="Contraseña incorrecta para el PDF protegido.")
+            # La contraseña es correcta: pdftotext la usará con -upw al procesar
+
         start_time = time.time()
         results = []
 
@@ -390,7 +472,7 @@ async def extract_transactions_csv(
         folio_re = re.compile(r"FOLIO[:\s]*[:#\-]?\s*([0-9]+)", re.IGNORECASE)
 
         with open(temp_path, "rb") as f:
-            pdf = PDF(f, physical=True)
+            pdf = PDF(f, physical=True, password=password)
             
             # Unificar todas las líneas de todas las páginas
             all_lines = []

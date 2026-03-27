@@ -23,21 +23,62 @@ export default function UploadPartialStatement({ onFileProcessed }: UploadPartia
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
+  // Estados para PDF bloqueado
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pdfPassword, setPdfPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [checkingLock, setCheckingLock] = useState(false);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] || null;
     setFile(selected);
     setMessage("");
+    setPdfPassword("");
+    setPasswordError("");
   };
 
-  const handleUpload = async () => {
+  const checkIfPdfLocked = async (selectedFile: File): Promise<boolean> => {
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    const response = await fetch("http://localhost:8000/api/v1/check-pdf-locked", {
+      method: "POST",
+      body: formData,
+    });
+    if (!response.ok) throw new Error("Error al verificar el archivo PDF.");
+    const data = await response.json();
+    return data.locked as boolean;
+  };
+
+  const handleUpload = async (password?: string) => {
     if (!file) {
       setMessage("Selecciona un archivo PDF antes de continuar.");
       return;
     }
 
+    // Si no tenemos contraseña aún, verificar si el PDF está bloqueado
+    if (!password) {
+      setCheckingLock(true);
+      try {
+        const locked = await checkIfPdfLocked(file);
+        if (locked) {
+          setCheckingLock(false);
+          setShowPasswordModal(true);
+          return;
+        }
+      } catch (err) {
+        setCheckingLock(false);
+        setMessage("Error al verificar el archivo PDF.");
+        return;
+      }
+      setCheckingLock(false);
+    }
+
     setLoading(true);
     const formData = new FormData();
     formData.append("file", file);
+    if (password) {
+      formData.append("password", password);
+    }
 
     try {
       const response = await fetch(
@@ -48,6 +89,13 @@ export default function UploadPartialStatement({ onFileProcessed }: UploadPartia
         }
       );
 
+      if (response.status === 401) {
+        // Contraseña incorrecta
+        setPasswordError("Contraseña incorrecta. Intenta de nuevo.");
+        setShowPasswordModal(true);
+        setLoading(false);
+        return;
+      }
       if (!response.ok) throw new Error("Error al procesar el archivo.");
 
       // 🟢 Convertir la respuesta a blob y descargar el archivo CSV
@@ -122,12 +170,22 @@ export default function UploadPartialStatement({ onFileProcessed }: UploadPartia
           2
         )} segundos.`
       );
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
       setMessage("Ocurrió un error al procesar el archivo parcial.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePasswordSubmit = () => {
+    if (!pdfPassword.trim()) {
+      setPasswordError("Por favor ingresa la contraseña.");
+      return;
+    }
+    setPasswordError("");
+    setShowPasswordModal(false);
+    handleUpload(pdfPassword);
   };
 
   return (
@@ -154,17 +212,69 @@ export default function UploadPartialStatement({ onFileProcessed }: UploadPartia
         </div>
 
         <button
-          onClick={handleUpload}
-          disabled={loading}
+          onClick={() => handleUpload()}
+          disabled={loading || checkingLock}
           className="bg-blue-700 hover:bg-blue-800 text-white font-semibold py-2 px-6 rounded-lg transition duration-300 disabled:opacity-50"
         >
-          {loading ? "Procesando..." : "Subir y Procesar"}
+          {checkingLock ? "Verificando PDF..." : loading ? "Procesando..." : "Subir y Procesar"}
         </button>
 
         {message && (
           <p className="mt-4 text-sm text-gray-600 font-medium">{message}</p>
         )}
       </div>
+
+      {/* Modal de contraseña para PDF bloqueado */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">🔒</span>
+              <h3 className="text-lg font-semibold text-gray-800">
+                PDF Protegido con Contraseña
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              El archivo <span className="font-medium">{file?.name}</span> está
+              protegido. Ingresa la contraseña para continuar.
+            </p>
+            <input
+              type="password"
+              value={pdfPassword}
+              onChange={(e) => {
+                setPdfPassword(e.target.value);
+                setPasswordError("");
+              }}
+              onKeyDown={(e) => e.key === "Enter" && handlePasswordSubmit()}
+              placeholder="Contraseña del PDF"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+              autoFocus
+            />
+            {passwordError && (
+              <p className="text-xs text-red-500 mb-3">{passwordError}</p>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={handlePasswordSubmit}
+                disabled={loading}
+                className="flex-1 bg-blue-700 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 disabled:opacity-50"
+              >
+                {loading ? "Procesando..." : "Confirmar"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPdfPassword("");
+                  setPasswordError("");
+                }}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-300"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {history.length > 0 && (
         <div className="bg-gray-100 p-6 rounded-2xl shadow max-w-[66rem] mx-auto mt-10">
@@ -188,3 +298,4 @@ export default function UploadPartialStatement({ onFileProcessed }: UploadPartia
     </>
   );
 }
+

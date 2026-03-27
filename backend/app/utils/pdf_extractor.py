@@ -73,13 +73,14 @@ else:
         raise ImportError("No se encontró pdftotext.exe ni PyMuPDF. No se pueden procesar PDFs.")
 
 
-def _extract_with_pdftotext_exe(pdf_file_path, physical=False):
+def _extract_with_pdftotext_exe(pdf_file_path, physical=False, password=""):
     """
     Extrae texto de un PDF usando el ejecutable pdftotext de Poppler.
     
     Args:
         pdf_file_path: Ruta al archivo PDF en disco
         physical: Si True, usa -layout para mantener posiciones
+        password: Contraseña del PDF (opcional, se pasa con -upw)
     
     Returns:
         Lista de strings, uno por página
@@ -97,6 +98,8 @@ def _extract_with_pdftotext_exe(pdf_file_path, physical=False):
     
     # Primero, obtener el número de páginas extrayendo todo el texto
     cmd = [PDFTOTEXT_EXE]
+    if password:
+        cmd.extend(["-upw", password])
     if physical:
         cmd.append("-layout")
     cmd.extend(["-enc", "UTF-8", pdf_file_path, "-"])
@@ -146,11 +149,12 @@ class PDF:
     Fallback a PyMuPDF si pdftotext.exe no está disponible.
     """
     
-    def __init__(self, file, physical=False):
+    def __init__(self, file, physical=False, password=""):
         """
         Args:
             file: file object opened in binary mode
             physical: bool - usar layout físico (mantiene posiciones)
+            password: str - contraseña del PDF protegido (opcional)
         """
         backend_name = 'pdftotext.exe' if USE_PDFTOTEXT else 'PyMuPDF'
         logger.info(f"[PDF-EXTRACTOR] Inicializando PDF (physical={physical}, backend={backend_name})")
@@ -166,7 +170,7 @@ class PDF:
                     tmp_path = tmp.name
                 
                 try:
-                    self.pages = _extract_with_pdftotext_exe(tmp_path, physical=physical)
+                    self.pages = _extract_with_pdftotext_exe(tmp_path, physical=physical, password=password)
                 finally:
                     # Limpiar archivo temporal
                     try:
