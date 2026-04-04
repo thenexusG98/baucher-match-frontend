@@ -151,7 +151,10 @@ async def upload_pdf(file: UploadFile = File(...)):
     
 
 @router.post("/download-csv")
-async def upload_csv(file: UploadFile = File(...)):
+async def upload_csv(
+    file: UploadFile = File(...),
+    password: str = Form(default="")
+):
     logger.info(f"[UPLOAD-CSV] Iniciando procesamiento de archivo: {file.filename}")
     
     temp_path = f"temp/{file.filename}"
@@ -170,10 +173,21 @@ async def upload_csv(file: UploadFile = File(...)):
         file_size = os.path.getsize(temp_path)
         logger.info(f"[UPLOAD-CSV] Archivo guardado correctamente. Tamaño: {file_size} bytes")
 
+        # Si se proporcionó contraseña, verificar que sea correcta con pdftotext -upw
+        if password:
+            ok = _check_pdf_password(temp_path, password)
+            if not ok:
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+                raise HTTPException(status_code=401, detail="Contraseña incorrecta para el PDF protegido.")
+            logger.info(f"[UPLOAD-CSV] Contraseña verificada correctamente.")
+
         start_time = time.time()
         logger.info(f"[UPLOAD-CSV] Llamando a process_pdf_file() en thread pool...")
         loop = asyncio.get_event_loop()
-        movimientos_json_path = await loop.run_in_executor(None, process_pdf_file, temp_path)
+        movimientos_json_path = await loop.run_in_executor(None, process_pdf_file, temp_path, password)
         logger.info(f"[UPLOAD-CSV] process_pdf_file() completado. JSON generado: {movimientos_json_path}")
         execution_time = time.time() - start_time
         logger.info(f"[UPLOAD-CSV] Tiempo de procesamiento PDF: {execution_time:.2f}s")

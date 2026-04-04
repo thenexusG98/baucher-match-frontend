@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 data = []
 
-def extract_transactions_from_pdf(pdf_name):
+def extract_transactions_from_pdf(pdf_name, password=""):
     logger.info(f"[EXTRACT-TRANS] Iniciando extracción de transacciones desde: {pdf_name}")
     analyze = False
     data = []
@@ -20,7 +20,7 @@ def extract_transactions_from_pdf(pdf_name):
         logger.info(f"[EXTRACT-TRANS] Abriendo archivo PDF...")
         with open(pdf_name, "rb") as file:
             logger.info(f"[EXTRACT-TRANS] Creando objeto PDF...")
-            pdf = PDF(file, physical=True)
+            pdf = PDF(file, physical=True, password=password)
             total_pages = len(pdf)
             logger.info(f"[EXTRACT-TRANS] PDF cargado. Total de páginas: {total_pages}")
             
@@ -77,7 +77,7 @@ def extract_transactions_from_pdf(pdf_name):
         logger.error(f"[EXTRACT-TRANS] Error durante extracción: {str(e)}", exc_info=True)
         raise
 
-def process_pdf_file(pdf_path):
+def process_pdf_file(pdf_path, password=""):
     file_name = pdf_path[8:-4].strip().replace(" ", "_")
     logger.info(f"[PROCESS-PDF] Iniciando procesamiento: {pdf_path[8:-4]}")
     logger.info(f"[PROCESS-PDF] Nombre de archivo procesado: {file_name}")
@@ -85,7 +85,7 @@ def process_pdf_file(pdf_path):
 
     try:
         logger.info(f"[PROCESS-PDF] Llamando a extract_transactions_from_pdf()...")
-        extracted_data = extract_transactions_from_pdf(pdf_path)
+        extracted_data = extract_transactions_from_pdf(pdf_path, password=password)
         logger.info(f"[PROCESS-PDF] Datos extraídos: {len(extracted_data)} registros")
         
         if not extracted_data:
