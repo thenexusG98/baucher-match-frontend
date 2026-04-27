@@ -336,6 +336,10 @@ async def extract_transactions_json(
                     if after_date and '$' in after_date:
                         concepto = after_date.split('$')[0].strip()
                 
+                # Limpiar uno o más prefijos de fecha al inicio del concepto (ej: "02/ENE 01/ENE") a
+                if concepto:
+                    concepto = re.sub(r"^(\d{1,2}/[A-Za-z]{3}\s+)+", "", concepto).strip() 
+                
                 # INFORMACIÓN ADICIONAL: revisar líneas SIGUIENTES (folios, códigos)
                 folio = None
                 next_info = []
@@ -536,6 +540,10 @@ async def extract_transactions_csv(
                             numero_control = nc_inline.group(1)
                             # Limpiar el número de control del concepto
                             concepto = re.sub(r"/?\d{3}?ITCV?\d{2}69\d{4}", "", concepto).strip()
+                
+                # Limpiar uno o más prefijos de fecha al inicio del concepto (ej: "02/ENE 01/ENE")
+                if concepto:
+                    concepto = re.sub(r"^(\d{1,2}/[A-Za-z]{3}\s+)+", "", concepto).strip()
                 
                 # INFORMACIÓN ADICIONAL: revisar líneas SIGUIENTES (folios, códigos)
                 folio = None
