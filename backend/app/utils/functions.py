@@ -107,6 +107,8 @@ def extract_fields(text):
             elif len(amounts_float) == 3:
                 charges, operation, liquidation = amounts_float
 
+        description = re.sub(r"^(\d{1,2}/[A-Za-z]{3}\s+)+", "", description).strip() 
+        
         result = {
             "FECHA_OPER": date_oper if date_oper else None,
             "FECHA_LIQ": date_liq if date_liq else None,
